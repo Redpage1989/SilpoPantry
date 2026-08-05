@@ -9,6 +9,7 @@ import {
 } from './delivery-context'
 import { sanitizeForTrace, logEvent, maskTail } from './pii'
 import type {
+  CartWriteItem,
   McpTraceEntry,
   ProductSearchQuery,
   ProductSearchResult,
@@ -384,25 +385,39 @@ export class LiveSilpoAdapter implements SilpoAdapter {
   // ─────────────────────────── кошик ───────────────────────────
 
   /**
-   * Активний кошик. У «Сільпо» новий акаунт може взагалі не мати кошика —
-   * сервер відповідає «Resource not found». Це не помилка інтеграції,
-   * тому повертаємо порожній кошик із чесним поясненням, а не падаємо.
+   * Активний кошик — ДВА виклики, як і описано в рекомендованому flow «Сільпо»:
+   *
+   *   silpo_get_my_shopping_cart      → лише { success, shoppingCartId }
+   *   silpo_get_shopping_cart_by_id   → повний вміст
+   *
+   * Перший інструмент вмісту не повертає взагалі, тож без другого кроку
+   * кошик виглядав би порожнім навіть тоді, коли в ньому є товари.
    */
   async getCart(): Promise<SilpoCart> {
-    try {
-      const raw = await this.call<Record<string, unknown>>({
-        candidates: ['silpo_get_my_shopping_cart', 'get_my_shopping_cart'],
-        keywords: ['cart'],
-      })
-      const cart = toCart(raw)
-      this.cartId = cart.cartId || this.cartId
-      return cart
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (!/resource not found/i.test(message)) throw err
-      logEvent('info', 'mcp.cart_absent', {})
-      return emptyCart('У вашому акаунті «Сільпо» ще немає активного кошика')
+    let cartId = this.cartId
+    if (!cartId) {
+      try {
+        const head = await this.call<Record<string, unknown>>({
+          candidates: ['silpo_get_my_shopping_cart', 'get_my_shopping_cart'],
+          keywords: ['cart'],
+        })
+        cartId = pickString(unwrap(head), ['shoppingCartId', 'cartId', 'id']) ?? null
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (!/resource not found/i.test(message)) throw err
+        logEvent('info', 'mcp.cart_absent', {})
+        return emptyCart('У вашому акаунті «Сільпо» ще немає активного кошика')
+      }
     }
+    if (!cartId) return emptyCart('«Сільпо» не повернув ідентифікатор кошика')
+    this.cartId = cartId
+
+    const full = await this.call<Record<string, unknown>>({
+      candidates: ['silpo_get_shopping_cart_by_id', 'get_shopping_cart_by_id'],
+      keywords: ['cart', 'id'],
+      buildArgs: () => ({ shoppingCartId: cartId }),
+    })
+    return toCart(full, cartId)
   }
 
   async getTimeSlots(): Promise<SilpoTimeSlot[]> {
@@ -431,18 +446,34 @@ export class LiveSilpoAdapter implements SilpoAdapter {
    * WRITE-операція. Викликається виключно з addConfirmedItemsToCart,
    * який, своєю чергою, вимагає одноразовий confirmationToken користувача.
    */
-  async addToCart(items: { productId: string; quantity: number }[]): Promise<SilpoCart> {
+  /**
+   * WRITE. Реальна схема вимагає для КОЖНОГО товару четвірку
+   * productId + companyId + branchId + quantity. companyId і branchId
+   * приходять у відповіді пошуку, тому ми зберігаємо їх у ProductOption
+   * ще на етапі підбору — інакше додати товар неможливо в принципі.
+   */
+  async addToCart(items: CartWriteItem[]): Promise<SilpoCart> {
     const cartId = await this.ensureCartId()
+    const ctx = await this.ensureContext()
+
+    const products = items.map((i) => {
+      const companyId = i.companyId ?? ctx.companyId
+      const branchId = i.branchId ?? ctx.branchId
+      if (!companyId || !branchId) {
+        throw new Error(
+          `Для «${i.productId}» бракує companyId або branchId — «Сільпо» не прийме такий товар у кошик`,
+        )
+      }
+      return { productId: i.productId, companyId, branchId, quantity: i.quantity, addQuantity: true }
+    })
+
     await this.call<unknown>({
       candidates: ['silpo_add_or_update_cart_products', 'add_or_update_cart_products'],
       keywords: ['cart', 'add'],
       write: true,
-      // реальна схема: shoppingCartId + products (НЕ cartId і не items)
-      buildArgs: () => ({
-        shoppingCartId: cartId,
-        products: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-      }),
+      buildArgs: () => ({ shoppingCartId: cartId, products }),
     })
+    // кеш вмісту застарів — перечитуємо з сервера
     return this.getCart()
   }
 
@@ -452,6 +483,7 @@ export class LiveSilpoAdapter implements SilpoAdapter {
       candidates: ['silpo_remove_cart_products', 'remove_cart_products'],
       keywords: ['cart', 'remove'],
       write: true,
+      // для видалення достатньо самого productId — так каже схема
       buildArgs: () => ({
         shoppingCartId: cartId,
         products: productIds.map((productId) => ({ productId })),
@@ -556,6 +588,7 @@ function toProductOption(raw: unknown): ProductOption | null {
   return {
     productId,
     companyId: pickString(o, ['companyId', 'company']),
+    branchId: pickString(o, ['branchId']),
     slug: pickString(o, ['slug']),
     name,
     brand: pickString(o, ['brand', 'trademark']),
@@ -618,35 +651,78 @@ function emptyCart(note: string): SilpoCart {
   }
 }
 
-function toCart(raw: Record<string, unknown>): SilpoCart {
-  const o = unwrap(raw)
-  const lines = asArray(o.products ?? o.items ?? o.lines ?? []).map((l) => {
-    const it = l as Record<string, unknown>
-    return {
-      productId: pickString(it, ['productId', 'id']) ?? '',
-      name: pickString(it, ['name', 'title']) ?? 'Товар',
-      quantity: pickNumber(it, ['quantity', 'qty', 'count']) ?? 1,
-      price: toKopiyky(pickNumber(it, ['price', 'regularPrice'])) ?? 0,
-      promoPrice: toKopiyky(pickNumber(it, ['promoPrice', 'discountPrice'])),
-    }
-  })
-  const subtotal = toKopiyky(pickNumber(o, ['subtotal', 'sum'])) ?? lines.reduce((s, l) => s + l.price * l.quantity, 0)
-  const discount = toKopiyky(pickNumber(o, ['discount', 'totalDiscount'])) ?? 0
-  const deliveryPrice = toKopiyky(pickNumber(o, ['deliveryPrice', 'deliveryCost'])) ?? 0
+/**
+ * Реальна структура кошика «Сільпо»:
+ *   { success, cart: { id, deliveryType, timeslot{start,end}, shipments[{ branchId, products[] }],
+ *                      calculation{ total, subTotal, subDiscount, delivery{total}, validations[] } },
+ *     loyalty: { bonusAvailable, ... } }
+ *
+ * Товари лежать НЕ в cart.products, а всередині shipments — доставка може
+ * бути розділена на кілька відправлень з різних філій.
+ */
+function toCart(raw: Record<string, unknown>, knownId?: string | null): SilpoCart {
+  const root = raw ?? {}
+  const cart = (root.cart ?? unwrap(root)) as Record<string, unknown>
+  const loyalty = (root.loyalty ?? {}) as Record<string, unknown>
+  const calc = (cart.calculation ?? {}) as Record<string, unknown>
+
+  const shipments = Array.isArray(cart.shipments) ? (cart.shipments as Record<string, unknown>[]) : []
+  const lines = shipments.flatMap((shipment) =>
+    (Array.isArray(shipment.products) ? (shipment.products as Record<string, unknown>[]) : []).map((it) => {
+      const current = toKopiyky(pickNumber(it, ['price'])) ?? 0
+      const old = toKopiyky(pickNumber(it, ['oldPrice']))
+      const hasPromo = old !== undefined && old > current && current > 0
+      return {
+        productId: pickString(it, ['productId', 'id']) ?? '',
+        name: pickString(it, ['name', 'title']) ?? 'Товар',
+        quantity: pickNumber(it, ['quantity', 'qty']) ?? 1,
+        price: hasPromo ? old! : current,
+        promoPrice: hasPromo ? current : undefined,
+      }
+    }),
+  )
+
+  const subtotal = toKopiyky(pickNumber(calc, ['subTotal'])) ?? 0
+  const discount = toKopiyky(pickNumber(calc, ['subDiscount'])) ?? 0
+  const delivery = toKopiyky(pickNumber((calc.delivery ?? {}) as Record<string, unknown>, ['total'])) ?? 0
+  const total = toKopiyky(pickNumber(calc, ['totalAfterDiscounts', 'total'])) ?? subtotal - discount + delivery
+
+  const timeslot = (cart.timeslot ?? {}) as Record<string, unknown>
+  const cartId = pickString(cart, ['id', 'shoppingCartId']) ?? knownId ?? ''
+
   return {
-    cartId: pickString(o, ['id', 'cartId']) ?? '',
-    branchId: pickString(o, ['branchId', 'filialId']),
-    deliveryType: pickString(o, ['deliveryType', 'fulfillmentType']),
-    timeSlotId: pickString(o, ['timeSlotId', 'slotId']),
+    cartId,
+    branchId: shipments[0] ? pickString(shipments[0], ['branchId']) : undefined,
+    deliveryType: pickString(cart, ['deliveryType']),
+    timeSlotId: pickString(timeslot, ['start']),
     lines,
     subtotal,
     discount,
-    total: toKopiyky(pickNumber(o, ['total', 'totalSum'])) ?? subtotal - discount + deliveryPrice,
-    deliveryPrice,
-    balabonusesAvailable: pickNumber(o, ['balabonuses', 'bonuses']) ?? 0,
-    validations: asArray(o.validations ?? o.errors ?? []).map((v) =>
-      typeof v === 'string' ? v : String((v as Record<string, unknown>)?.message ?? ''),
-    ),
-    checkoutUrl: pickString(o, ['checkoutUrl', 'checkoutLink', 'url']) ?? null,
+    total,
+    deliveryPrice: delivery,
+    balabonusesAvailable: pickNumber(loyalty, ['bonusAvailable', 'bonusTotal']) ?? 0,
+    validations: normalizeValidations(calc.validations),
+    checkoutUrl: cartId ? 'https://silpo.ua/cart' : null,
   }
+}
+
+/** Валідації приходять обʼєктами з машинними кодами — перекладаємо людською мовою. */
+function normalizeValidations(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const MESSAGES: Record<string, string> = {
+    'product.offer.not_found': 'Товару немає в обраній філії',
+    'product.offer.stock.max': 'Доступна менша кількість, ніж у кошику',
+    'product.offer.stock.zero': 'Товар закінчився',
+    'cart.min_order_cost': 'Сума менша за мінімальну для доставки',
+  }
+  return raw
+    .map((v) => {
+      if (typeof v === 'string') return v
+      const o = v as Record<string, unknown>
+      const code = pickString(o, ['message', 'code']) ?? ''
+      const level = pickString(o, ['level']) ?? 'info'
+      const text = MESSAGES[code] ?? code
+      return level === 'error' ? `⚠️ ${text}` : text
+    })
+    .filter(Boolean)
 }

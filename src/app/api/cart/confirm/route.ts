@@ -15,6 +15,8 @@ const Input = z.object({
         ingredientName: z.string(),
         normalizedName: z.string(),
         productId: z.string(),
+        companyId: z.string().optional(),
+        branchId: z.string().optional(),
         productName: z.string(),
         tier: z.string(),
         quantity: z.number().int().min(1).max(20),

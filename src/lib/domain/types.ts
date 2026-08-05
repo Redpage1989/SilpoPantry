@@ -174,6 +174,8 @@ export interface ProductOption {
   companyId?: string
   /** slug потрібен для silpo_get_product_details — сервер не приймає id */
   slug?: string
+  /** філія, з якої доступний товар; обовʼязкова при додаванні в кошик */
+  branchId?: string
   name: string
   brand?: string
   price: Kopiyky

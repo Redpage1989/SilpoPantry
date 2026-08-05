@@ -13,7 +13,18 @@ import type { TraceStep } from '@/lib/agent/tools'
 
 interface TierOption {
   tier: ProductTier
-  product: { productId: string; name: string; brand?: string; price: number; promoPrice?: number; rating?: number; packSize: number; unit: Unit }
+  product: {
+    productId: string
+    companyId?: string
+    branchId?: string
+    name: string
+    brand?: string
+    price: number
+    promoPrice?: number
+    rating?: number
+    packSize: number
+    unit: Unit
+  }
   quantity: number
   lineTotal: number
   promoSaving: number
@@ -94,6 +105,8 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
             ingredientName: c.ingredient.name,
             normalizedName: c.ingredient.normalizedName,
             productId: option.product.productId,
+            companyId: option.product.companyId,
+            branchId: option.product.branchId,
             productName: option.product.name,
             tier: option.tier,
             quantity: option.quantity,

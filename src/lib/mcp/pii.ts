@@ -39,7 +39,12 @@ function looksLikePerson(obj: Record<string, unknown>): boolean {
 const OPAQUE_ID_KEYS = ['userid', 'profileid', 'clientid', 'sessionid', 'deviceid', 'loyaltyid', 'cardid']
 
 const EMAIL_RE = /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g
-const PHONE_RE = /(\+?38)?[\s(-]?0\d{2}[\s)-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}\b/g
+/**
+ * Український номер. Межі навмисно суворі: без них шаблон ловив шматки
+ * UUID (`00000000-0000-0000-...`) і перетворював ідентифікатори філій
+ * на «телефон приховано» — трейс ставав нечитабельним і вводив в оману.
+ */
+const PHONE_RE = /(?<![\w-])(\+?38[\s-]?)?\(?0\d{2}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}(?![\w-])/g
 const LONG_TOKEN_RE = /\b[A-Za-z0-9_-]{40,}\b/g
 
 export function maskString(input: string): string {

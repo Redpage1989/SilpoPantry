@@ -106,6 +106,17 @@ export interface SilpoCart {
   checkoutUrl: string | null
 }
 
+/**
+ * Позиція для запису в кошик. companyId і branchId обовʼязкові в живому
+ * MCP «Сільпо», тому вони їдуть разом із товаром від самого пошуку.
+ */
+export interface CartWriteItem {
+  productId: string
+  quantity: number
+  companyId?: string
+  branchId?: string
+}
+
 export interface ProductSearchQuery {
   /** нормалізований ключ інгредієнта, для якого шукаємо */
   ingredientKey: string
@@ -140,7 +151,7 @@ export interface SilpoAdapter {
   getCart(): Promise<SilpoCart>
   getTimeSlots(): Promise<SilpoTimeSlot[]>
   /** WRITE. Викликається лише після явного підтвердження користувача. */
-  addToCart(items: { productId: string; quantity: number }[]): Promise<SilpoCart>
+  addToCart(items: CartWriteItem[]): Promise<SilpoCart>
   /** WRITE. */
   removeFromCart(productIds: string[]): Promise<SilpoCart>
   /** Витягує й очищає накопичений трейс. */

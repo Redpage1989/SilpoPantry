@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { sanitizeForTrace, maskString, maskTail, shortenId } from '@/lib/mcp/pii'
+import { validateArgs } from '@/lib/mcp/schema-guard'
 
 /**
  * Тести написані на РЕАЛЬНИХ формах відповідей MCP «Сільпо»,
@@ -107,5 +108,55 @@ describe('sanitizeForTrace на реальних формах відповіде
     expect(sanitizeForTrace(undefined)).toBeUndefined()
     expect(sanitizeForTrace(42)).toBe(42)
     expect(sanitizeForTrace(true)).toBe(true)
+  })
+})
+
+describe('SchemaGuard: валідація елементів масиву', () => {
+  const tool = {
+    name: 'silpo_add_or_update_cart_products',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        shoppingCartId: { type: 'string' },
+        products: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              productId: { type: 'string' },
+              companyId: { type: 'string' },
+              branchId: { type: 'string' },
+              quantity: { type: 'number' },
+            },
+            required: ['productId', 'companyId', 'branchId', 'quantity'],
+          },
+        },
+      },
+      required: ['shoppingCartId', 'products'],
+    },
+  }
+
+  it('відхиляє товар без companyId і branchId ДО мережевого виклику', () => {
+    const res = validateArgs(tool, {
+      shoppingCartId: 'cart-1',
+      products: [{ productId: 'p1', quantity: 1 }],
+    })
+    expect(res.ok).toBe(false)
+    expect(res.errors.join(' ')).toContain('companyId')
+    expect(res.errors.join(' ')).toContain('branchId')
+  })
+
+  it('пропускає повний елемент', () => {
+    const res = validateArgs(tool, {
+      shoppingCartId: 'cart-1',
+      products: [{ productId: 'p1', companyId: 'c1', branchId: 'b1', quantity: 1 }],
+    })
+    expect(res.ok).toBe(true)
+  })
+
+  it('відхиляє відсутнє обовʼязкове поле верхнього рівня', () => {
+    const res = validateArgs(tool, { products: [{ productId: 'p1', companyId: 'c', branchId: 'b', quantity: 1 }] })
+    expect(res.ok).toBe(false)
+    expect(res.errors.join(' ')).toContain('shoppingCartId')
   })
 })

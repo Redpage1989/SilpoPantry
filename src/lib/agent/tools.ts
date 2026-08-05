@@ -570,6 +570,9 @@ export interface ProposalLine {
   ingredientName: string
   normalizedName: string
   productId: string
+  /** обовʼязкові для live-запису в кошик «Сільпо» */
+  companyId?: string
+  branchId?: string
   productName: string
   tier: string
   quantity: number
@@ -629,7 +632,12 @@ export async function addConfirmedItemsToCart(
 
     const lines = JSON.parse(proposal.selectedProducts) as ProposalLine[]
     const cart = await ctx.adapter.addToCart(
-      lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+      lines.map((l) => ({
+        productId: l.productId,
+        quantity: l.quantity,
+        companyId: l.companyId,
+        branchId: l.branchId,
+      })),
     )
     await prisma.shoppingProposal.update({
       where: { id: proposal.id },

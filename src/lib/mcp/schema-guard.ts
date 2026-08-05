@@ -104,6 +104,10 @@ export function validateArgs(tool: McpToolDefinition, args: Record<string, unkno
     }
     const typeError = checkType(propSchema, value, key)
     if (typeError) errors.push(typeError)
+    // Масиви обʼєктів перевіряємо поелементно: саме тут ховалась дірка —
+    // `products: [{productId, quantity}]` проходив валідацію, хоча схема
+    // «Сільпо» вимагає ще companyId і branchId для кожного товару.
+    errors.push(...checkArrayItems(propSchema, value, key))
     cleaned[key] = value
   }
 
@@ -112,6 +116,34 @@ export function validateArgs(tool: McpToolDefinition, args: Record<string, unkno
   }
 
   return { ok: errors.length === 0, args: cleaned, errors, dropped }
+}
+
+/**
+ * Перевіряє обовʼязкові поля в елементах масиву. Без цього SchemaGuard
+ * давав хибне відчуття безпеки: верхній рівень валідний, а сервер
+ * усе одно відповідає -32602 через неповний елемент.
+ */
+function checkArrayItems(schema: JsonSchema, value: unknown, path: string): string[] {
+  if (schema.type !== 'array' || !Array.isArray(value)) return []
+  const itemSchema = schema.items
+  if (!itemSchema || itemSchema.type !== 'object') return []
+  const required = itemSchema.required ?? []
+  if (required.length === 0) return []
+
+  const errors: string[] = []
+  value.forEach((item, index) => {
+    if (typeof item !== 'object' || item === null) {
+      errors.push(`«${path}[${index}]» має бути обʼєктом`)
+      return
+    }
+    const obj = item as Record<string, unknown>
+    for (const key of required) {
+      if (obj[key] === undefined || obj[key] === null) {
+        errors.push(`«${path}[${index}]»: відсутнє обовʼязкове поле «${key}»`)
+      }
+    }
+  })
+  return errors
 }
 
 function checkType(schema: JsonSchema, value: unknown, path: string): string | null {

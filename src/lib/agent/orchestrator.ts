@@ -324,6 +324,8 @@ export function buildProposalLines(
       ingredientName: c.ingredient.name,
       normalizedName: c.ingredient.normalizedName,
       productId: chosen.product.productId,
+      companyId: chosen.product.companyId,
+      branchId: chosen.product.branchId,
       productName: chosen.product.name,
       tier: chosen.tier,
       quantity: chosen.quantity,

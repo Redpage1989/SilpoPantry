@@ -21,7 +21,8 @@ const PNG_BASE64 =
 async function startDemo(page: Page) {
   await page.goto('/login')
   await page.getByRole('button', { name: 'Спробувати в демонстраційному режимі' }).click()
-  await expect(page.getByRole('heading', { name: 'Антон' })).toBeVisible()
+  await page.waitForURL('**/')
+  await expect(page.getByRole('heading', { name: 'Антон' })).toBeVisible({ timeout: 30_000 })
   // Тести ділять одного демо-користувача, тому кожен починає з чистого стану:
   // інакше «Я це приготував» в одному тесті ламає очікування в іншому.
   const reset = await page.request.post('/api/dev/reset')

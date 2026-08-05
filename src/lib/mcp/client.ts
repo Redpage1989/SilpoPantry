@@ -59,6 +59,8 @@ interface ClientOptions {
   url: string
   accessToken?: string
   timeoutMs?: number
+  /** скільки разів пробувати при транспортній помилці (не при HTTP-відповіді) */
+  retries?: number
 }
 
 export class McpHttpClient {
@@ -88,24 +90,50 @@ export class McpHttpClient {
       ? { jsonrpc: '2.0', method, params }
       : { jsonrpc: '2.0', id: this.nextId++, method, params }
 
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), this.timeout)
+    /**
+     * Мережевий ретрай. Спостережено на живому mcp.silpo.ua: приблизно один
+     * запит із десятка падає з `fetch failed` ще до відповіді сервера.
+     * Під час демонстрації журі це виглядало б як зламаний застосунок,
+     * тому одиничний збій має бути невидимим.
+     *
+     * Ретраїмо ЛИШЕ транспортні помилки. HTTP-відповідь будь-якого коду —
+     * це вже відповідь сервера, і повторювати її не можна: tools/call
+     * може виявитись не ідемпотентним.
+     */
+    const attempts = this.options.retries ?? 3
+    let res: Response | null = null
+    let lastTransportError: unknown
 
-    let res: Response
-    try {
-      res = await fetch(this.options.url, {
-        method: 'POST',
-        headers: this.headers(),
-        body: JSON.stringify(body),
-        signal: controller.signal,
-        cache: 'no-store',
-      })
-    } catch (err) {
-      clearTimeout(timer)
-      const message = err instanceof Error && err.name === 'AbortError' ? `Таймаут ${this.timeout} мс` : String(err)
-      throw new McpError(`Мережева помилка MCP: ${message}`, -32000)
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), this.timeout)
+      try {
+        res = await fetch(this.options.url, {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify(body),
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+        clearTimeout(timer)
+        break
+      } catch (err) {
+        clearTimeout(timer)
+        lastTransportError = err
+        const aborted = err instanceof Error && err.name === 'AbortError'
+        if (attempt < attempts && !aborted) {
+          logEvent('warn', 'mcp.transport_retry', { method, attempt, of: attempts })
+          await new Promise((r) => setTimeout(r, 400 * attempt))
+          continue
+        }
+        const message = aborted ? `Таймаут ${this.timeout} мс` : String(err)
+        throw new McpError(`Мережева помилка MCP: ${message}`, -32000)
+      }
     }
-    clearTimeout(timer)
+
+    if (!res) {
+      throw new McpError(`Мережева помилка MCP: ${String(lastTransportError)}`, -32000)
+    }
 
     const newSession = res.headers.get('mcp-session-id')
     if (newSession) this.sessionId = newSession

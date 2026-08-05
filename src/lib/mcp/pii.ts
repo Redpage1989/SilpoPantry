@@ -13,9 +13,27 @@ const SENSITIVE_KEYS = [
   'phone', 'phonenumber', 'mobile', 'email', 'mail',
   'address', 'street', 'apartment', 'flat', 'house', 'building', 'zip', 'postcode',
   'cardnumber', 'card', 'pan', 'cvv', 'iban', 'taxid', 'inn', 'passport',
-  'firstname', 'lastname', 'middlename', 'fullname', 'patronymic', 'birthdate', 'dateofbirth',
+  'firstname', 'lastname', 'middlename', 'fullname', 'patronymic',
+  // дата народження приходить під різними іменами — ловимо всі
+  'birthdate', 'dateofbirth', 'birthday', 'birthdayat', 'dob',
+  'gender', 'sex',
   'latitude', 'longitude', 'lat', 'lng', 'coordinates',
 ]
+
+/**
+ * Ключі, наявність яких означає «цей обʼєкт описує людину».
+ * Потрібні, бо `name` маскувати завжди не можна — це ще й назва товару,
+ * купона чи категорії, і без неї трейс стає нечитабельним.
+ */
+const PERSON_MARKERS = ['phone', 'email', 'birthday', 'birthdate', 'profileid', 'itsme', 'patronymic']
+
+/** У контексті людини ці поля теж стають персональними даними. */
+const PERSON_SCOPED_KEYS = ['name', 'displayname', 'title', 'image', 'avatar', 'photo']
+
+function looksLikePerson(obj: Record<string, unknown>): boolean {
+  const keys = Object.keys(obj).map((k) => k.toLowerCase())
+  return PERSON_MARKERS.some((marker) => keys.includes(marker))
+}
 
 /** Технічні id, які не потрібні для демонстрації і теж ховаються. */
 const OPAQUE_ID_KEYS = ['userid', 'profileid', 'clientid', 'sessionid', 'deviceid', 'loyaltyid', 'cardid']
@@ -58,10 +76,17 @@ export function sanitizeForTrace(value: unknown, depth = 0): unknown {
     return value.length > 20 ? [...limited, `…ще ${value.length - 20}`] : limited
   }
   if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    const isPerson = looksLikePerson(obj)
     const out: Record<string, unknown> = {}
-    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, val] of Object.entries(obj)) {
       const lower = key.toLowerCase()
       if (SENSITIVE_KEYS.some((k) => lower.includes(k))) {
+        out[key] = '«приховано»'
+        continue
+      }
+      // «name» — це і назва товару, і імʼя людини. Маскуємо лише друге.
+      if (isPerson && PERSON_SCOPED_KEYS.includes(lower)) {
         out[key] = '«приховано»'
         continue
       }

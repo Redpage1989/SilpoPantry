@@ -97,6 +97,46 @@ flowchart LR
 Це прямо закриває головний ризик інтеграції — «модель вигадала аргумент».
 Payload, який не відповідає схемі сервера, не відправляється взагалі.
 
+### Контекст доставки — головне відкриття інтеграції
+
+Каталожні інструменти «Сільпо» не працюють без четвірки
+`branchId + deliveryType + timeslotStart + timeslotEnd`; без неї сервер
+відповідає `-32602 Input validation error`. Тому перед першим запитом до
+каталогу агент виконує bootstrap (`lib/mcp/delivery-context.ts`):
+
+```mermaid
+flowchart LR
+  A([Потрібен каталог]) --> B{Є активний кошик?}
+  B -- так --> C["branchId, deliveryType,\ntimeslot з кошика"]
+  B -- ні --> D[silpo_list_branches\nhasPickup=true]
+  D --> E[silpo_get_time_slots\nlimit=48]
+  E --> F{Є доступний слот?}
+  F -- так --> G[беремо його]
+  F -- ні --> H[пробуємо наступну філію]
+  H --> E
+  C --> Z[(кеш на сесію адаптера)]
+  G --> Z
+```
+
+Реальні схеми, зняті з сервера (`npm run mcp:inspect`):
+
+| Інструмент | required |
+|---|---|
+| `silpo_get_my_profile` / `_family` / `_food_restrictions` / `_loyalty_info` | — |
+| `silpo_find_products_batch` | `branchId, deliveryType, timeslotStart, timeslotEnd, products` |
+| `silpo_get_product_details` | `branchId, **slug**, deliveryType, timeslotStart, timeslotEnd` |
+| `silpo_get_replacements` | `branchId, companyId, productIds, deliveryType` |
+| `silpo_get_time_slots` | `branchId` |
+| `silpo_add_or_update_cart_products` | `**shoppingCartId**, products` |
+
+Три особливості сервера, які довелось обійти в коді:
+
+1. **Помилки повертаються текстом без `isError`** — `"Error in get-time-slots: API returned 500"`.
+   Без явної перевірки нормалізатор перетворив би текст помилки на «порожній кошик».
+2. **Параметр `start` у `get_time_slots` дає 500** — тому беремо `limit: 48` і фільтруємо самі.
+3. **Транспортні збої** — приблизно один запит із десятка падає з `fetch failed` до відповіді.
+   Клієнт ретраїть лише транспортні помилки, ніколи — HTTP-відповіді.
+
 ### Перевірені факти про сервер
 
 ```

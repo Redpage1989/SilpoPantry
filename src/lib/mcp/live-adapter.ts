@@ -1,6 +1,12 @@
 import type { ProductOption, Unit } from '@/lib/domain/types'
 import { McpHttpClient, extractToolJson, type McpToolDefinition } from './client'
 import { buildRegistry, describeSchema, resolveTool, validateArgs, type ToolRegistry } from './schema-guard'
+import {
+  bootstrapDeliveryContext,
+  errorPayloadMessage,
+  isErrorPayload,
+  type DeliveryContext,
+} from './delivery-context'
 import { sanitizeForTrace, logEvent, maskTail } from './pii'
 import type {
   McpTraceEntry,
@@ -52,6 +58,9 @@ export class LiveSilpoAdapter implements SilpoAdapter {
   private trace: McpTraceEntry[] = []
   /** активний cartId кешуємо, щоб не смикати сервер на кожен крок */
   private cartId: string | null = null
+  /** контекст доставки: без нього каталог відповідає -32602 */
+  private context: DeliveryContext | null = null
+  private contextAttempted = false
 
   constructor(private readonly client: McpHttpClient) {}
 
@@ -104,6 +113,11 @@ export class LiveSilpoAdapter implements SilpoAdapter {
     try {
       const result = await this.client.callTool(tool.name, validation.args)
       const payload = extractToolJson<T>(result)
+      // Сервер повертає помилки текстом без isError — ловимо це явно,
+      // інакше нормалізатор перетворить текст помилки на «порожній результат»
+      if (isErrorPayload(payload)) {
+        throw new Error(`${tool.name}: ${errorPayloadMessage(payload)}`)
+      }
       this.trace.push({
         at: new Date().toISOString(),
         tool: tool.name,
@@ -130,6 +144,36 @@ export class LiveSilpoAdapter implements SilpoAdapter {
       })
       throw err
     }
+  }
+
+  /**
+   * Ліниво піднімає контекст доставки. Виконується щонайбільше один раз
+   * на адаптер; якщо не вдалось — каталожні методи чесно падають,
+   * а рівень вище деградує в demo.
+   */
+  private async ensureContext(): Promise<DeliveryContext> {
+    if (this.context) return this.context
+    if (this.contextAttempted) throw new Error('Не вдалося визначити філію та слот доставки «Сільпо»')
+    this.contextAttempted = true
+
+    const reg = await this.registry_()
+    const started = Date.now()
+    const ctx = await bootstrapDeliveryContext(this.client, new Set(reg.all.map((t) => t.name)))
+    this.trace.push({
+      at: new Date().toISOString(),
+      tool: 'bootstrapDeliveryContext',
+      mode: 'live',
+      ok: !!ctx,
+      durationMs: Date.now() - started,
+      args: {},
+      resultPreview: ctx
+        ? { source: ctx.source, city: ctx.branchCity, deliveryType: ctx.deliveryType, timeslot: `${ctx.timeslotStart} → ${ctx.timeslotEnd}` }
+        : null,
+      error: ctx ? undefined : 'Не вдалося отримати branchId і timeslot',
+    })
+    if (!ctx) throw new Error('Не вдалося визначити філію та слот доставки «Сільпо»')
+    this.context = ctx
+    return ctx
   }
 
   // ─────────────────────────── профіль і родина ───────────────────────────
@@ -266,25 +310,26 @@ export class LiveSilpoAdapter implements SilpoAdapter {
   // ─────────────────────────── каталог ───────────────────────────
 
   async findProducts(queries: ProductSearchQuery[]): Promise<ProductSearchResult[]> {
+    const ctx = await this.ensureContext()
     const raw = await this.call<unknown>({
       candidates: ['silpo_find_products_batch', 'silpo_get_products', 'find_products_batch'],
       keywords: ['product', 'search'],
-      buildArgs: (tool) => {
-        const props = Object.keys((tool.inputSchema?.properties ?? {}) as Record<string, unknown>)
-        // підлаштовуємось під фактичну назву поля, яку оголосив сервер
-        if (props.includes('queries')) return { queries: queries.map((q) => q.query) }
-        if (props.includes('searches')) return { searches: queries.map((q) => q.query) }
-        if (props.includes('keywords')) return { keywords: queries.map((q) => q.query) }
-        if (props.includes('query')) return { query: queries[0]?.query ?? '' }
-        return { queries: queries.map((q) => q.query) }
-      },
+      buildArgs: () => ({
+        branchId: ctx.branchId,
+        deliveryType: ctx.deliveryType,
+        timeslotStart: ctx.timeslotStart,
+        timeslotEnd: ctx.timeslotEnd,
+        // сервер очікує масив РЯДКІВ-запитів, максимум 30
+        products: queries.map((q) => q.query).slice(0, 30),
+        limit: Math.max(...queries.map((q) => q.limit ?? 5), 5),
+      }),
     })
 
-    const groups = asArray(raw)
-    // Сервер може повернути або плаский список товарів, або групи за запитом.
+    // Форма відповіді: { success, queries: [{ query, totalFound, products: [...] }] }
+    const groups = asArray((raw as Record<string, unknown>)?.queries ?? raw)
     return queries.map((q, index) => {
       const group = groups[index] as Record<string, unknown> | undefined
-      const list = group && (group.products || group.items) ? asArray(group.products ?? group.items) : groups
+      const list = group ? asArray(group.products ?? group.items ?? group) : []
       return {
         ingredientKey: q.ingredientKey,
         products: list
@@ -295,30 +340,41 @@ export class LiveSilpoAdapter implements SilpoAdapter {
     })
   }
 
-  async getProductDetails(productId: string): Promise<ProductOption | null> {
+  /**
+   * Деталі товару. Сервер приймає САМЕ slug, а не id — це видно зі схеми
+   * (`required: branchId, slug, deliveryType, timeslotStart, timeslotEnd`),
+   * тому slug ми зберігаємо ще на етапі пошуку.
+   */
+  async getProductDetails(slugOrId: string): Promise<ProductOption | null> {
+    const ctx = await this.ensureContext()
     const raw = await this.call<unknown>({
       candidates: ['silpo_get_product_details', 'get_product_details'],
       keywords: ['product', 'details'],
-      buildArgs: (tool) => {
-        const props = Object.keys((tool.inputSchema?.properties ?? {}) as Record<string, unknown>)
-        if (props.includes('productId')) return { productId }
-        if (props.includes('id')) return { id: productId }
-        if (props.includes('productIds')) return { productIds: [productId] }
-        return { productId }
-      },
+      buildArgs: () => ({
+        branchId: ctx.branchId,
+        slug: slugOrId,
+        deliveryType: ctx.deliveryType,
+        timeslotStart: ctx.timeslotStart,
+        timeslotEnd: ctx.timeslotEnd,
+      }),
     })
-    const first = Array.isArray(raw) ? raw[0] : unwrap(raw as Record<string, unknown>)
-    return toProductOption(first)
+    const obj = raw && typeof raw === 'object' ? unwrap(raw as Record<string, unknown>) : null
+    return toProductOption(obj)
   }
 
-  async getReplacements(productId: string): Promise<ProductOption[]> {
+  async getReplacements(productId: string, companyId?: string): Promise<ProductOption[]> {
+    const ctx = await this.ensureContext()
+    const company = companyId ?? ctx.companyId
+    if (!company) return []
     const raw = await this.call<unknown>({
       candidates: ['silpo_get_replacements', 'silpo_get_similar_products', 'get_replacements'],
       keywords: ['replacement'],
-      buildArgs: (tool) => {
-        const props = Object.keys((tool.inputSchema?.properties ?? {}) as Record<string, unknown>)
-        return props.includes('productIds') ? { productIds: [productId] } : { productId }
-      },
+      buildArgs: () => ({
+        branchId: ctx.branchId,
+        companyId: company,
+        productIds: [productId],
+        deliveryType: ctx.deliveryType,
+      }),
     })
     return asArray(raw)
       .map(toProductOption)
@@ -327,31 +383,48 @@ export class LiveSilpoAdapter implements SilpoAdapter {
 
   // ─────────────────────────── кошик ───────────────────────────
 
+  /**
+   * Активний кошик. У «Сільпо» новий акаунт може взагалі не мати кошика —
+   * сервер відповідає «Resource not found». Це не помилка інтеграції,
+   * тому повертаємо порожній кошик із чесним поясненням, а не падаємо.
+   */
   async getCart(): Promise<SilpoCart> {
-    const raw = await this.call<Record<string, unknown>>({
-      candidates: ['silpo_get_my_shopping_cart', 'get_my_shopping_cart'],
-      keywords: ['cart'],
-    })
-    const cart = toCart(raw)
-    this.cartId = cart.cartId || this.cartId
-    return cart
+    try {
+      const raw = await this.call<Record<string, unknown>>({
+        candidates: ['silpo_get_my_shopping_cart', 'get_my_shopping_cart'],
+        keywords: ['cart'],
+      })
+      const cart = toCart(raw)
+      this.cartId = cart.cartId || this.cartId
+      return cart
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (!/resource not found/i.test(message)) throw err
+      logEvent('info', 'mcp.cart_absent', {})
+      return emptyCart('У вашому акаунті «Сільпо» ще немає активного кошика')
+    }
   }
 
   async getTimeSlots(): Promise<SilpoTimeSlot[]> {
+    const ctx = await this.ensureContext()
     const raw = await this.call<unknown>({
       candidates: ['silpo_get_time_slots', 'get_time_slots'],
       keywords: ['time', 'slot'],
+      // `start` навмисно не передаємо: на живому сервері він дає 500
+      buildArgs: () => ({ branchId: ctx.branchId, limit: 48 }),
     })
-    return asArray(raw).map((s) => {
-      const o = s as Record<string, unknown>
-      return {
-        slotId: pickString(o, ['id', 'slotId']) ?? 'slot',
-        from: pickString(o, ['from', 'start', 'startTime']) ?? '',
-        to: pickString(o, ['to', 'end', 'endTime']) ?? '',
-        available: (o.available ?? o.isAvailable ?? true) === true,
-        price: toKopiyky(pickNumber(o, ['price', 'cost'])) ?? 0,
-      }
-    })
+    return asArray(raw)
+      .map((s) => {
+        const o = s as Record<string, unknown>
+        return {
+          slotId: pickString(o, ['id', 'slotId']) ?? `${pickString(o, ['start']) ?? ''}`,
+          from: pickString(o, ['start', 'from', 'startTime']) ?? '',
+          to: pickString(o, ['end', 'to', 'endTime']) ?? '',
+          available: (o.available ?? o.isAvailable ?? true) === true,
+          price: toKopiyky(pickNumber(o, ['deliveryCost', 'price', 'cost'])) ?? 0,
+        }
+      })
+      .filter((s) => s.from)
   }
 
   /**
@@ -359,38 +432,45 @@ export class LiveSilpoAdapter implements SilpoAdapter {
    * який, своєю чергою, вимагає одноразовий confirmationToken користувача.
    */
   async addToCart(items: { productId: string; quantity: number }[]): Promise<SilpoCart> {
+    const cartId = await this.ensureCartId()
     await this.call<unknown>({
       candidates: ['silpo_add_or_update_cart_products', 'add_or_update_cart_products'],
       keywords: ['cart', 'add'],
       write: true,
-      buildArgs: (tool) => {
-        const props = Object.keys((tool.inputSchema?.properties ?? {}) as Record<string, unknown>)
-        const payload: Record<string, unknown> = {}
-        if (props.includes('cartId') && this.cartId) payload.cartId = this.cartId
-        if (props.includes('products')) payload.products = items
-        else if (props.includes('items')) payload.items = items
-        else payload.products = items
-        return payload
-      },
+      // реальна схема: shoppingCartId + products (НЕ cartId і не items)
+      buildArgs: () => ({
+        shoppingCartId: cartId,
+        products: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+      }),
     })
     return this.getCart()
   }
 
   async removeFromCart(productIds: string[]): Promise<SilpoCart> {
+    const cartId = await this.ensureCartId()
     await this.call<unknown>({
       candidates: ['silpo_remove_cart_products', 'remove_cart_products'],
       keywords: ['cart', 'remove'],
       write: true,
-      buildArgs: (tool) => {
-        const props = Object.keys((tool.inputSchema?.properties ?? {}) as Record<string, unknown>)
-        const payload: Record<string, unknown> = {}
-        if (props.includes('cartId') && this.cartId) payload.cartId = this.cartId
-        if (props.includes('productIds')) payload.productIds = productIds
-        else payload.products = productIds.map((productId) => ({ productId }))
-        return payload
-      },
+      buildArgs: () => ({
+        shoppingCartId: cartId,
+        products: productIds.map((productId) => ({ productId })),
+      }),
     })
     return this.getCart()
+  }
+
+  /** Без активного кошика write-операції неможливі — кажемо про це прямо. */
+  private async ensureCartId(): Promise<string> {
+    if (this.cartId) return this.cartId
+    const cart = await this.getCart()
+    if (!cart.cartId) {
+      throw new Error(
+        'У вашому акаунті «Сільпо» немає активного кошика. Додайте будь-який товар у застосунку «Сільпо», щоб кошик створився.',
+      )
+    }
+    this.cartId = cart.cartId
+    return this.cartId
   }
 }
 
@@ -400,7 +480,8 @@ export class LiveSilpoAdapter implements SilpoAdapter {
 
 function unwrap(raw: Record<string, unknown> | null | undefined): Record<string, unknown> {
   if (!raw || typeof raw !== 'object') return {}
-  for (const key of ['data', 'result', 'profile', 'item', 'payload']) {
+  // Реальні обгортки «Сільпо»: { success, profile } / { success, loyalty } / { success, cart }
+  for (const key of ['data', 'result', 'profile', 'loyalty', 'cart', 'shoppingCart', 'item', 'payload']) {
     const inner = raw[key]
     if (inner && typeof inner === 'object' && !Array.isArray(inner)) return inner as Record<string, unknown>
   }
@@ -410,7 +491,10 @@ function unwrap(raw: Record<string, unknown> | null | undefined): Record<string,
 function asArray(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw
   if (raw && typeof raw === 'object') {
-    for (const key of ['items', 'data', 'results', 'products', 'orders', 'members', 'list', 'coupons', 'slots']) {
+    for (const key of [
+      'items', 'data', 'results', 'products', 'orders', 'members', 'list',
+      'coupons', 'slots', 'timeslots', 'restrictions', 'branches', 'promos', 'queries',
+    ]) {
       const inner = (raw as Record<string, unknown>)[key]
       if (Array.isArray(inner)) return inner
     }
@@ -442,28 +526,62 @@ function toKopiyky(value: number | undefined): number | undefined {
   return Number.isInteger(value) && value > 1000 ? value : Math.round(value * 100)
 }
 
+/**
+ * Мапінг товару під РЕАЛЬНУ форму відповіді «Сільпо»:
+ *   { id, name, slug, price, oldPrice, stock, available, companyId, branchId, weighted }
+ *
+ * Важливо: `price` — це поточна (можливо, акційна) ціна, а `oldPrice` —
+ * звичайна. Тому promoPrice = price тоді й лише тоді, коли oldPrice більший.
+ * Ціни приходять у гривнях цілим числом, ми ж скрізь рахуємо в копійках.
+ */
 function toProductOption(raw: unknown): ProductOption | null {
   if (!raw || typeof raw !== 'object') return null
   const o = unwrap(raw as Record<string, unknown>)
   const productId = pickString(o, ['id', 'productId', 'sku'])
   const name = pickString(o, ['name', 'title', 'productName'])
   if (!productId || !name) return null
-  const price = toKopiyky(pickNumber(o, ['price', 'currentPrice', 'regularPrice'])) ?? 0
-  const promo = toKopiyky(pickNumber(o, ['promoPrice', 'discountPrice', 'specialPrice']))
-  const unitRaw = (pickString(o, ['unit', 'measure', 'uom']) ?? 'г').toLowerCase()
-  const unit: Unit = unitRaw.startsWith('л') ? 'л' : unitRaw.startsWith('мл') ? 'мл' : unitRaw.startsWith('кг') ? 'кг' : unitRaw.startsWith('шт') ? 'шт' : 'г'
+
+  const current = toKopiyky(pickNumber(o, ['price', 'currentPrice'])) ?? 0
+  const old = toKopiyky(pickNumber(o, ['oldPrice', 'regularPrice']))
+  const hasPromo = old !== undefined && old > current && current > 0
+
+  /**
+   * Вагу беремо з назви, бо batch-пошук «Сільпо» її окремим полем не віддає.
+   * Якщо в назві її немає — це НЕ «1 г», а «одна упаковка невідомої ваги».
+   * Різниця принципова: інакше ціна за 100 г вийшла б у сотні разів завищена
+   * і зламала б поділ на бюджетний/оптимальний/преміальний.
+   */
+  const pack = parsePackFromTitle(name) ?? fallbackPack(o)
+
   return {
     productId,
     companyId: pickString(o, ['companyId', 'company']),
+    slug: pickString(o, ['slug']),
     name,
     brand: pickString(o, ['brand', 'trademark']),
-    price,
-    promoPrice: promo,
-    unit,
-    packSize: pickNumber(o, ['packSize', 'weight', 'volume', 'quantity']) ?? 1,
+    price: hasPromo ? old! : current,
+    promoPrice: hasPromo ? current : undefined,
+    unit: pack.unit,
+    packSize: pack.size,
     rating: pickNumber(o, ['rating', 'score']),
     allergens: Array.isArray(o.allergens) ? (o.allergens as unknown[]).map(String) : undefined,
   }
+}
+
+/** Коли ваги немає ніде — товар рахується як одна штука-упаковка. */
+function fallbackPack(o: Record<string, unknown>): { size: number; unit: Unit } {
+  const explicit = pickNumber(o, ['packSize', 'weight', 'volume'])
+  if (explicit && explicit > 1) return { size: explicit, unit: 'г' }
+  return { size: 1, unit: 'шт' }
+}
+
+/** «Сир Ghidetti «Маскарпоне» 45%, 250 г» → { size: 250, unit: 'г' } */
+function parsePackFromTitle(title: string): { size: number; unit: Unit } | null {
+  const m = /(\d+[.,]?\d*)\s*(кг|мл|л|шт|г)(?!\p{L})/iu.exec(title)
+  if (!m) return null
+  const size = Number(m[1].replace(',', '.'))
+  if (!Number.isFinite(size) || size <= 0) return null
+  return { size, unit: m[2].toLowerCase() as Unit }
 }
 
 function toOrder(raw: unknown, kind: SilpoOrder['kind']): SilpoOrder {
@@ -483,6 +601,20 @@ function toOrder(raw: unknown, kind: SilpoOrder['kind']): SilpoOrder {
         price: toKopiyky(pickNumber(it, ['price', 'sum', 'amount'])) ?? 0,
       }
     }),
+  }
+}
+
+function emptyCart(note: string): SilpoCart {
+  return {
+    cartId: '',
+    lines: [],
+    subtotal: 0,
+    discount: 0,
+    total: 0,
+    deliveryPrice: 0,
+    balabonusesAvailable: 0,
+    validations: [note],
+    checkoutUrl: null,
   }
 }
 

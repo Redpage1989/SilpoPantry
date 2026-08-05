@@ -17,7 +17,10 @@
     "db:seed": "tsx prisma/seed.ts",
     "setup": "npm run db:generate && npm run db:push && npm run db:seed",
     "mcp:probe": "tsx scripts/mcp-probe.ts",
-    "verify": "npm run typecheck && npm run lint && npm run test"
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "mcp:inspect": "tsx scripts/live-inspect.ts",
+    "mcp:explore": "tsx scripts/live-explore.ts",
+    "mcp:e2e": "tsx scripts/live-e2e.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

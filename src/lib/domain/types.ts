@@ -172,6 +172,8 @@ export const TIER_LABELS: Record<ProductTier, string> = {
 export interface ProductOption {
   productId: string
   companyId?: string
+  /** slug потрібен для silpo_get_product_details — сервер не приймає id */
+  slug?: string
   name: string
   brand?: string
   price: Kopiyky

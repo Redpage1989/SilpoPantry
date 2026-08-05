@@ -1,0 +1,255 @@
+// «Сільпо: Сімейна комора» — hackathon prototype
+// provider перемикається скриптом scripts/set-db-provider.mjs (DATABASE_PROVIDER=postgresql|sqlite)
+// Enum-и навмисно не використовуються: SQLite їх не підтримує, а нам потрібен
+// один і той самий файл схеми для локального SQLite і продакшн-PostgreSQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  silpoProfileId String?  @unique
+  displayName    String
+  /// "demo" | "silpo" — джерело сесії, впливає на бейдж DEMO MODE
+  authMode       String   @default("demo")
+  /// тижневий бюджет у копійках, щоб не тримати гроші у float
+  weeklyBudget   Int?
+  mealsPerDay    Int      @default(3)
+  maxCookMinutes Int      @default(45)
+  onboardedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  members      HouseholdMember[]
+  restrictions FoodRestriction[]
+  pantryItems  PantryItem[]
+  jobs         RecognitionJob[]
+  mealPlans    MealPlan[]
+  proposals    ShoppingProposal[]
+  agentRuns    AgentRun[]
+  mcpSessions  McpSession[]
+  imports      ReceiptImport[]
+
+  @@index([silpoProfileId])
+}
+
+model HouseholdMember {
+  id     String @id @default(cuid())
+  userId String
+  name   String
+  /// "adult" | "child" | "teen" | "senior"
+  type   String
+  age    Int?
+  /// JSON-масив рядків: улюблені/нелюбі продукти, теги смаків
+  preferences String @default("[]")
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restrictions FoodRestriction[]
+
+  @@index([userId])
+}
+
+model FoodRestriction {
+  id       String  @id @default(cuid())
+  userId   String
+  memberId String?
+  /// "allergy" | "intolerance" | "diet" | "dislike" | "religious"
+  restrictionType String
+  /// нормалізований ключ алергену/дієти, напр. "арахіс", "лактоза", "vegetarian"
+  value    String
+  /// "critical" | "high" | "medium" | "low"
+  severity String  @default("medium")
+  note     String?
+
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  member HouseholdMember? @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([memberId])
+}
+
+model PantryItem {
+  id             String    @id @default(cuid())
+  userId         String
+  /// ключ для матчингу з рецептами: нижній регістр, без бренду й форми слова
+  normalizedName String
+  originalName   String
+  category       String
+  quantity       Float
+  unit           String
+  expiryDate     DateTime?
+  /// "fridge" | "freezer" | "produce" | "pantry" | "drinks" | "snacks" | "baby" | "other"
+  storageLocation String   @default("pantry")
+  /// "photo" | "manual" | "online_order" | "offline_receipt" | "previous_cart"
+  source         String
+  confidence     Float     @default(1)
+  /// потребує підтвердження користувача (усе, що прийшло з фото/чека)
+  needsConfirmation Boolean @default(false)
+  /// ідентифікатори товару в «Сільпо», якщо джерело — чек або кошик
+  productId      String?
+  companyId      String?
+  consumedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, normalizedName])
+  @@index([userId, expiryDate])
+}
+
+model RecognitionJob {
+  id        String   @id @default(cuid())
+  userId    String
+  /// ключ тимчасового файлу; сам файл живе TTL і видаляється
+  imageKey  String
+  /// "pending" | "processing" | "done" | "failed"
+  status    String   @default("pending")
+  /// "claude" | "demo" — чи це справжній vision-виклик
+  engine    String   @default("demo")
+  /// JSON-результат розпізнавання (items[])
+  rawResult String?
+  error     String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Recipe {
+  id          String @id @default(cuid())
+  slug        String @unique
+  title       String
+  summary     String
+  servings    Int
+  cookingTime Int
+  /// "easy" | "medium" | "hard"
+  difficulty  String @default("easy")
+  cuisine     String @default("Українська")
+  /// "breakfast" | "lunch" | "dinner" | "dessert" | "snack"
+  mealType    String @default("dinner")
+  /// JSON: [{ name, normalizedName, quantity, unit, optional, substitutes[] }]
+  ingredients String
+  /// JSON: [{ step, text, timerMinutes }]
+  steps       String
+  /// JSON: { kcal, protein, fat, carbs } — приблизні значення
+  nutrition   String
+  /// JSON: масив тегів ("vegetarian", "spicy", "kid-friendly")
+  tags        String @default("[]")
+  imageEmoji  String @default("🍲")
+  /// "seed" | "ai" | "user"
+  source      String @default("seed")
+
+  mealPlans MealPlan[]
+}
+
+model MealPlan {
+  id       String   @id @default(cuid())
+  userId   String
+  date     DateTime
+  /// "breakfast" | "lunch" | "dinner" | "dessert" | "snack"
+  mealType String
+  recipeId String
+  /// "planned" | "cooked" | "skipped"
+  status   String   @default("planned")
+  servings Int      @default(2)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
+model ShoppingProposal {
+  id                String   @id @default(cuid())
+  userId            String
+  recipeId          String?
+  goal              String
+  /// JSON: [{ normalizedName, name, quantity, unit }]
+  missingIngredients String
+  /// JSON: [{ ingredient, tier, productId, name, price, promoPrice, quantity }]
+  selectedProducts  String
+  /// сума в копійках
+  totalPrice        Int      @default(0)
+  /// "draft" | "confirmed" | "added_to_cart" | "cancelled"
+  status            String   @default("draft")
+  /// одноразовий токен, без якого write-tool у кошик не виконується
+  confirmationToken String   @unique
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AgentRun {
+  id        String   @id @default(cuid())
+  userId    String
+  goal      String
+  /// "running" | "done" | "failed"
+  status    String   @default("running")
+  /// JSON-масив кроків із маскованими PII — саме це показує Agent Trace
+  safeTrace String   @default("[]")
+  /// скільки з кроків були справжніми MCP-викликами
+  liveMcpCalls Int   @default(0)
+  durationMs   Int   @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Токени OAuth 2.1 — виключно серверне сховище. У браузер їде лише sessionId у httpOnly cookie.
+model McpSession {
+  id           String   @id @default(cuid())
+  userId       String
+  clientId     String
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime
+  scope        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Журнал наповнення комори з історії чеків «Сільпо» — головне джерело даних продукту
+model ReceiptImport {
+  id          String   @id @default(cuid())
+  userId      String
+  /// "online_order" | "offline_receipt"
+  kind        String
+  orderRef    String
+  orderDate   DateTime
+  /// скільки позицій з чека стали продуктами комори
+  importedCount Int    @default(0)
+  /// JSON: [{ productName, normalizedName, category, shelfLifeDays, decision }]
+  detail      String   @default("[]")
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orderRef])
+  @@index([userId])
+}
+
+/// Кошик demo-режиму. У live-режимі кошик живе на боці «Сільпо»,
+/// але демонстрація має переживати перезапуск сервера, тому тримаємо його тут.
+model DemoCart {
+  userId    String   @id
+  /// JSON-масив SilpoCartLine
+  lines     String   @default("[]")
+  updatedAt DateTime @updatedAt
+}

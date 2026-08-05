@@ -1,0 +1,215 @@
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { getUserId } from '@/lib/session'
+import { runDashboard } from '@/lib/agent/orchestrator'
+import { Badge, BrandSlot, Card, LinkButton, ModeBadge, Progress, SectionTitle, Stat } from '@/components/ui'
+import { formatUah, pluralize } from '@/lib/domain/scoring'
+import { expiryStatus, daysUntil } from '@/lib/domain/pantry'
+import { displayName } from '@/lib/domain/normalize'
+import { formatQuantity } from '@/lib/domain/units'
+import { DishRequestBar } from '@/components/DishRequestBar'
+
+export const dynamic = 'force-dynamic'
+
+export default async function HomePage() {
+  const userId = await getUserId()
+  if (!userId) redirect('/login')
+
+  const run = await runDashboard(userId)
+  const { household, expiring, suggestions, daysOfFood, cart, promos, loyalty, restock } = run.data
+  const now = new Date()
+
+  return (
+    <main className="safe-top px-4 pb-6 pt-4">
+      <header className="mb-4 flex items-center justify-between gap-2">
+        <div>
+          <div className="text-[12px] text-graphite-500">Вітаємо,</div>
+          <h1 className="text-[22px] font-bold leading-tight tracking-tight">{household.displayName}</h1>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <ModeBadge mode={run.mode} reason={run.modeReason} />
+          <Badge tone="accent">Hackathon prototype</Badge>
+        </div>
+      </header>
+
+      <div className="mb-4">
+        <BrandSlot />
+      </div>
+
+      {/* Швидкі дії — найбільші кнопки на екрані */}
+      <div className="mb-5 grid grid-cols-2 gap-3">
+        <Link
+          href="/scan"
+          className="flex min-h-[92px] flex-col justify-between rounded-[var(--radius-card)] bg-accent-500 p-4 text-white active:bg-accent-600"
+        >
+          <span className="text-2xl" aria-hidden>
+            📸
+          </span>
+          <span className="text-[14px] font-semibold leading-tight">Сфотографувати холодильник</span>
+        </Link>
+        <div className="flex min-h-[92px] flex-col justify-between rounded-[var(--radius-card)] bg-white p-4 shadow-[0_2px_14px_rgba(34,31,28,0.06)]">
+          <span className="text-2xl" aria-hidden>
+            🍽️
+          </span>
+          <span className="text-[14px] font-semibold leading-tight text-graphite-900">
+            Хочу приготувати конкретну страву
+          </span>
+        </div>
+      </div>
+
+      <div className="mb-5">
+        <DishRequestBar />
+      </div>
+
+      {/* Що приготуємо сьогодні */}
+      <SectionTitle action={<Link href="/recipes" className="text-[13px] font-medium text-accent-600">Усі страви</Link>}>
+        Що приготуємо сьогодні?
+      </SectionTitle>
+      <div className="mb-5 space-y-3">
+        {suggestions.length === 0 && (
+          <Card>
+            <p className="text-[13px] text-graphite-500">
+              Поки що недостатньо даних. Додайте продукти через сканування або імпортуйте чеки «Сільпо».
+            </p>
+          </Card>
+        )}
+        {suggestions.map((s) => (
+          <Link key={s.recipe.id} href={`/recipes/${s.recipe.slug}`} className="block">
+            <Card className="animate-rise">
+              <div className="flex gap-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-cream-200 text-2xl" aria-hidden>
+                  {s.recipe.imageEmoji}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-[15px] font-semibold leading-tight">{s.recipe.title}</h3>
+                    <Badge tone={s.coverage.missing.length === 0 ? 'success' : 'accent'}>
+                      {Math.round(s.coverage.coverage * 100)}%
+                    </Badge>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-graphite-500">
+                    <span>⏱ {s.recipe.cookingTime} хв</span>
+                    <span>·</span>
+                    <span>{s.recipe.servings} порц.</span>
+                    <span>·</span>
+                    <span>~{s.recipe.nutrition.kcal} ккал</span>
+                    {s.coverage.missing.length > 0 && (
+                      <span className="text-accent-700">· докупити ≈ {formatUah(s.missingCost)}</span>
+                    )}
+                  </div>
+                  <div className="mt-2">
+                    <Progress value={s.coverage.coverage} tone={s.coverage.missing.length === 0 ? 'success' : 'accent'} />
+                  </div>
+                  <p className="mt-2 text-[12px] leading-snug text-graphite-500">{s.reason}</p>
+                </div>
+              </div>
+            </Card>
+          </Link>
+        ))}
+      </div>
+
+      {/* Продукти, які треба використати */}
+      <SectionTitle action={<Link href="/pantry" className="text-[13px] font-medium text-accent-600">Комора</Link>}>
+        {expiring.length > 0
+          ? `${expiring.length} ${pluralize(expiring.length, 'продукт', 'продукти', 'продуктів')} потрібно використати найближчим часом`
+          : 'Терміни придатності під контролем'}
+      </SectionTitle>
+      <Card className="mb-5">
+        {expiring.length === 0 ? (
+          <p className="text-[13px] text-graphite-500">
+            Продуктів із близьким терміном придатності немає. Так тримати — це і є менше харчових відходів.
+          </p>
+        ) : (
+          <ul className="divide-y divide-cream-200">
+            {expiring.map((item) => {
+              const status = expiryStatus(item.expiryDate, now)
+              const days = item.expiryDate ? daysUntil(item.expiryDate, now) : null
+              return (
+                <li key={item.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <div className="truncate text-[14px] font-medium">{displayName(item.originalName)}</div>
+                    <div className="text-[11px] text-graphite-500">
+                      {formatQuantity(item.quantity, item.unit)} · {item.category}
+                    </div>
+                  </div>
+                  <Badge tone={status === 'use_today' || status === 'expired' ? 'danger' : 'warn'}>
+                    {status === 'expired'
+                      ? 'Термін минув'
+                      : days === 0
+                        ? 'Сьогодні'
+                        : days === 1
+                          ? 'До завтра'
+                          : `${days} дн.`}
+                  </Badge>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Card>
+
+      {/* Показники */}
+      <Card className="mb-5">
+        <div className="flex gap-3">
+          <Stat
+            label="Вистачить продуктів"
+            value={`≈ ${daysOfFood} ${pluralize(Math.round(daysOfFood), 'день', 'дні', 'днів')}`}
+            hint={`на ${household.members.length} ос.`}
+          />
+          <div className="w-px bg-cream-200" />
+          <Stat
+            label="Бюджет на тиждень"
+            value={household.weeklyBudget ? formatUah(household.weeklyBudget) : '—'}
+            hint={cart.total > 0 ? `у кошику ${formatUah(cart.total)}` : 'кошик порожній'}
+          />
+        </div>
+      </Card>
+
+      {/* Докупити */}
+      {restock.length > 0 && (
+        <>
+          <SectionTitle>Товари, які варто докупити</SectionTitle>
+          <Card className="mb-5">
+            <ul className="space-y-2">
+              {restock.map((r) => (
+                <li key={r.name} className="flex items-baseline justify-between gap-3">
+                  <span className="text-[14px] font-medium">{displayName(r.name)}</span>
+                  <span className="text-right text-[11px] text-graphite-500">{r.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </>
+      )}
+
+      {/* Персональні пропозиції */}
+      <SectionTitle>Персональні пропозиції «Сільпо»</SectionTitle>
+      <Card className="mb-5">
+        {promos.length === 0 ? (
+          <p className="text-[13px] text-graphite-500">Персональних акцій зараз немає.</p>
+        ) : (
+          <ul className="space-y-2.5">
+            {promos.slice(0, 4).map((p) => (
+              <li key={p.promoId} className="flex gap-2.5 text-[13px]">
+                <span aria-hidden>🏷️</span>
+                <span className="text-graphite-700">{p.title}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {loyalty.balabonuses > 0 && (
+          <div className="mt-3 rounded-2xl bg-accent-50 p-3 text-[13px] text-accent-700">
+            Доступно балабонусів: <strong>{loyalty.balabonuses}</strong>
+            {loyalty.level ? ` · ${loyalty.level}` : ''}
+          </div>
+        )}
+      </Card>
+
+      <div className="flex gap-3">
+        <LinkButton href="/trace" variant="secondary" full>
+          Як працює агент
+        </LinkButton>
+      </div>
+    </main>
+  )
+}

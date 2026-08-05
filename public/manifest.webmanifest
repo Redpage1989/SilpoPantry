@@ -1,0 +1,14 @@
+{
+  "name": "Сільпо: Сімейна комора",
+  "short_name": "Сімейна комора",
+  "description": "AI-агент домашніх запасів, меню та кошика. Прототип хакатону.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdf7ec",
+  "theme_color": "#f57c1f",
+  "lang": "uk",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

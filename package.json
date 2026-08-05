@@ -1,0 +1,52 @@
+{
+  "name": "silpo-family-pantry",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Сільпо: Сімейна комора — AI-агент домашніх запасів, меню та кошика (hackathon prototype)",
+  "scripts": {
+    "dev": "next dev -p 3210",
+    "build": "next build",
+    "start": "next start -p 3210",
+    "lint": "eslint ./src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:push": "prisma db push --skip-generate",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
+    "setup": "npm run db:generate && npm run db:push && npm run db:seed",
+    "mcp:probe": "tsx scripts/mcp-probe.ts",
+    "verify": "npm run typecheck && npm run lint && npm run test"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.1",
+    "@prisma/client": "^6.2.1",
+    "@tanstack/react-query": "^5.62.11",
+    "clsx": "^2.1.1",
+    "next": "^15.5.22",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-hook-form": "^7.54.2",
+    "tailwind-merge": "^2.6.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@playwright/test": "^1.49.1",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "eslint": "^9.18.0",
+    "eslint-config-next": "^15.5.22",
+    "prisma": "^6.2.1",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

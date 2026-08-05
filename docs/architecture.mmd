@@ -1,0 +1,60 @@
+%% «Сільпо: Сімейна комора» — архітектура прототипу
+%% Рендер: https://mermaid.live або будь-який Mermaid-сумісний переглядач
+
+flowchart TB
+  subgraph CLIENT["📱 Браузер · PWA mobile-first 390×844"]
+    direction TB
+    SCREENS["Головна · Комора · Сканувати · Рецепти · Кошик"]
+    STATE["TanStack Query · React Hook Form · Zod"]
+    SCREENS --- STATE
+  end
+
+  subgraph SERVER["🖥️ Next.js 15 App Router · тільки серверний код"]
+    direction TB
+
+    subgraph APILAYER["Route Handlers"]
+      GUARD["Zod-валідація · CSRF double-submit · rate limit"]
+    end
+
+    subgraph AGENTLAYER["FamilyFoodAgent"]
+      PLANNER["Планувальник:\nявний план кроків"]
+      TOOLS["16 типізованих інструментів"]
+      TRACE["safeTrace з маскуванням PII"]
+      PLANNER --> TOOLS --> TRACE
+    end
+
+    subgraph DOMAINLAYER["Домейн — чиста логіка, 84 unit-тести"]
+      NORM["normalize · units"]
+      MATCH["matching · pantry"]
+      SCORE["scoring 6 факторів"]
+      PRICE["pricing · cook-vs-ready"]
+      RECEIPT["receipts → інференс комори"]
+    end
+
+    subgraph INTEG["Інтеграції"]
+      AILAYER["Claude multimodal\nforced tool use → Zod"]
+      MCPLAYER["MCP-шар:\nOAuth 2.1 + PKCE + DCR\nStreamable HTTP\nSchemaGuard"]
+    end
+
+    DBL[("Prisma\nSQLite | PostgreSQL")]
+  end
+
+  subgraph EXT["☁️ Зовнішні сервіси"]
+    SILPO["MCP «Сільпо»\nmcp.silpo.ua/mcp\n39 інструментів"]
+    ANTH["Anthropic Messages API"]
+  end
+
+  STATE -->|"fetch + x-csrf-token"| GUARD
+  GUARD --> PLANNER
+  TOOLS --> DOMAINLAYER
+  TOOLS --> AILAYER
+  TOOLS --> MCPLAYER
+  TOOLS --> DBL
+  AILAYER -->|"HTTPS"| ANTH
+  MCPLAYER -->|"Bearer, тільки з сервера"| SILPO
+
+  CLIENT -. "токен НІКОЛИ не потрапляє сюди" .-> SILPO
+
+  classDef ext fill:#ffe4cc,stroke:#e06a10,color:#221f1c
+  classDef danger stroke-dasharray: 5 5,stroke:#d93a2b,color:#d93a2b
+  class SILPO,ANTH ext

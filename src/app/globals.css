@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+
+/*
+  Візуальна система «Сільпо: Сімейна комора».
+
+  Кольори підібрані як нейтральна тепла палітра в дусі екосистеми «Сільпо»,
+  але це ВЛАСНІ токени прототипу, а не витягнуті бренд-асети.
+  Місця під офіційні логотипи позначені компонентом <BrandSlot />.
+*/
+
+@theme {
+  /* тепла кремова база */
+  --color-cream-50: #fffdf9;
+  --color-cream-100: #fdf7ec;
+  --color-cream-200: #f7ecd9;
+  --color-cream-300: #eeddc2;
+
+  /* фірмовий помаранчевий акцент */
+  --color-accent-50: #fff4ea;
+  --color-accent-100: #ffe4cc;
+  --color-accent-300: #ffb066;
+  --color-accent-500: #f57c1f;
+  --color-accent-600: #e06a10;
+  --color-accent-700: #b8530a;
+
+  /* темно-графітовий текст */
+  --color-graphite-900: #221f1c;
+  --color-graphite-700: #3d3833;
+  --color-graphite-500: #6b625a;
+  --color-graphite-300: #a79c92;
+
+  /* статуси */
+  --color-danger-50: #fff1f0;
+  --color-danger-500: #d93a2b;
+  --color-danger-700: #a02a1f;
+  --color-warn-50: #fff8e6;
+  --color-warn-500: #e0a010;
+  --color-success-50: #eefaf0;
+  --color-success-500: #2f9e57;
+  --color-info-50: #eef4ff;
+  --color-info-500: #3b6fd4;
+
+  --radius-card: 1.5rem;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-cream-100);
+  color: var(--color-graphite-900);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+body {
+  /* застосунок mobile-first: центруємо «пристрій» на широких екранах */
+  margin: 0 auto;
+  max-width: 480px;
+  min-height: 100dvh;
+  padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+}
+
+/* Великі зони натискання: керування однією рукою */
+button,
+a[role='button'] {
+  touch-action: manipulation;
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Плавна поява карток, без надмірності */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.28s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise {
+    animation: none;
+  }
+}

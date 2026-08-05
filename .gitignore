@@ -1,0 +1,30 @@
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts.bak
+
+# env / secrets — НІЧОГО з цього не потрапляє в git
+.env
+.env.local
+.env*.local
+!.env.example
+
+# локальні дані
+prisma/dev.db
+prisma/dev.db-journal
+*.sqlite
+.silpo-cache/
+uploads/
+docs/live-mcp-proof/*.json
+!docs/live-mcp-proof/.gitkeep
+
+# тести
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+coverage/
+
+.DS_Store

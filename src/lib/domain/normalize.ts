@@ -1,0 +1,242 @@
+import type { Unit } from './types'
+
+/**
+ * Нормалізація назв продуктів.
+ *
+ * Задача: «Молоко "Селянське" ультрапастеризоване 2,5% 900 мл» з чека,
+ * «молоко» з рецепта і «Молочко» з фото мають зійтися в один ключ `молоко`.
+ *
+ * Свідомо без стемера-бібліотеки: український морфологічний стемінг у
+ * прототипі дає більше хибних злиттів, ніж користі. Замість цього —
+ * детермінований конвеєр: чистка → словник синонімів → обрізання закінчень.
+ */
+
+/** Слова-шуми з етикеток і чеків, які ніколи не є назвою продукту. */
+const NOISE_WORDS = new Set([
+  'ваговий', 'вагова', 'вагове', 'фасований', 'фасована', 'фасоване',
+  'пастеризоване', 'ультрапастеризоване', 'стерилізоване',
+  'охолоджений', 'охолоджена', 'охолоджене', 'заморожений', 'заморожена', 'заморожене',
+  'свіжий', 'свіжа', 'свіже', 'відбірний', 'відбірна', 'відбірне',
+  'преміум', 'класичний', 'класична', 'класичне', 'традиційний', 'традиційна',
+  'натуральний', 'натуральна', 'натуральне', 'домашній', 'домашня', 'домашнє',
+  'упаковка', 'уп', 'пак', 'пакет', 'пляшка', 'банка', 'лоток', 'кг', 'г', 'мл', 'л', 'шт',
+  'тм', 'тов', 'сільпо', 'власна', 'марка',
+])
+
+/**
+ * Синоніми та бренд-форми → канонічний ключ.
+ * Ключі словника вже нормалізовані (нижній регістр, без лапок).
+ */
+const SYNONYMS: Record<string, string> = {
+  // канонічні двослівні ключі — без цих identity-записів пошук по префіксу
+  // зупинявся б на першому слові («масло вершкове» → «масло»)
+  'масло вершкове': 'масло вершкове',
+  'сир твердий': 'сир твердий',
+  'сир кисломолочний': 'сир кисломолочний',
+  'куряче філе': 'куряче філе',
+
+  // молочна група
+  'молочко': 'молоко',
+  'молоко коров яче': 'молоко',
+  'вершкове масло': 'масло вершкове',
+  'масло селянське': 'масло вершкове',
+  'сир маскарпоне': 'маскарпоне',
+  'mascarpone': 'маскарпоне',
+  'сметана': 'сметана',
+  'вершки': 'вершки',
+  'йогурт натуральний': 'йогурт',
+  'творог': 'сир кисломолочний',
+  // яйця
+  'яйце': 'яйця',
+  'яйця курячі': 'яйця',
+  'яйце куряче': 'яйця',
+  'яйця столові': 'яйця',
+  // овочі
+  'помідор': 'помідори',
+  'томат': 'помідори',
+  'томати': 'помідори',
+  'огірок': 'огірки',
+  'цибуля ріпчаста': 'цибуля',
+  'цибулина': 'цибуля',
+  'часник зубчик': 'часник',
+  'шпінат': 'шпинат',
+  'картопля молода': 'картопля',
+  // бакалія
+  'макаронні вироби': 'макарони',
+  'паста': 'макарони',
+  'спагеті': 'макарони',
+  'спагетті': 'макарони',
+  'борошно пшеничне': 'борошно',
+  'мука': 'борошно',
+  'цукор білий': 'цукор',
+  'цукор кристалічний': 'цукор',
+  'сіль кухонна': 'сіль',
+  'олія соняшникова': 'олія',
+  'олія рафінована': 'олія',
+  'кава мелена': 'кава',
+  'кава розчинна': 'кава',
+  'кава зернова': 'кава',
+  'печиво савоярді': 'савоярді',
+  'савоярди': 'савоярді',
+  'савоярді печиво': 'савоярді',
+  'дамські пальчики': 'савоярді',
+  'какао порошок': 'какао',
+  'какао-порошок': 'какао',
+  // мʼясо / риба
+  'філе куряче': 'куряче філе',
+  'курка філе': 'куряче філе',
+  'грудка куряча': 'куряче філе',
+  'фарш свинячий': 'фарш',
+  'фарш яловичий': 'фарш',
+}
+
+/** Ключі, до яких не застосовуємо обрізання закінчень (щоб не зіпсувати). */
+const PROTECTED = new Set(['яйця', 'макарони', 'вершки', 'помідори', 'огірки', 'савоярді', 'какао'])
+
+/**
+ * Найпоширеніші відмінкові закінчення. Обрізаємо лише якщо
+ * основа лишається достатньо довгою — це прибирає «молока» → «молок»…
+ * тому далі йде крок canonical-мапи коротких основ.
+ */
+const ENDINGS = ['ами', 'ями', 'ові', 'еві', 'ах', 'ях', 'ою', 'ею', 'ів', 'ам', 'ям', 'ом', 'ем', 'а', 'у', 'и', 'і', 'е', 'о', 'я', 'ю']
+
+/** Основи після обрізання → канонічна форма. */
+const STEM_CANONICAL: Record<string, string> = {
+  'молок': 'молоко',
+  'масл': 'масло',
+  'цукр': 'цукор',
+  'цукор': 'цукор',
+  'борошн': 'борошно',
+  'шпинат': 'шпинат',
+  'сир': 'сир',
+  'кав': 'кава',
+  'сіл': 'сіль',
+  'олі': 'олія',
+  'картопл': 'картопля',
+  'цибул': 'цибуля',
+  'часник': 'часник',
+  'маскарпон': 'маскарпоне',
+  'смета н': 'сметана',
+  'сметан': 'сметана',
+  'йогурт': 'йогурт',
+  'фарш': 'фарш',
+  'хліб': 'хліб',
+  'рис': 'рис',
+  'мед': 'мед',
+}
+
+function stripDiacriticsAndPunct(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[«»"'`’ʼ]/g, ' ')
+    .replace(/[.,;:()\[\]{}!?*/\\|]/g, ' ')
+    .replace(/\d+[.,]?\d*\s*(кг|г|мл|л|шт|%)/g, ' ')
+    .replace(/\d+[.,]?\d*/g, ' ')
+    .replace(/[-–—]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Нормалізує назву продукту до ключа для матчингу. */
+export function normalizeProductName(raw: string): string {
+  if (!raw) return ''
+  const cleaned = stripDiacriticsAndPunct(raw)
+  if (!cleaned) return ''
+
+  if (SYNONYMS[cleaned]) return SYNONYMS[cleaned]
+
+  const words = cleaned.split(' ').filter((w) => w.length > 1 && !NOISE_WORDS.has(w))
+  if (words.length === 0) return cleaned
+
+  const withoutNoise = words.join(' ')
+  if (SYNONYMS[withoutNoise]) return SYNONYMS[withoutNoise]
+
+  // Пробуємо словник на префіксах: «масло вершкове селянське» → «масло вершкове»
+  for (let take = Math.min(words.length, 3); take >= 1; take--) {
+    const candidate = words.slice(0, take).join(' ')
+    if (SYNONYMS[candidate]) return SYNONYMS[candidate]
+  }
+
+  const head = words[0]
+  if (PROTECTED.has(head)) return words.length > 1 && SYNONYMS[withoutNoise] ? SYNONYMS[withoutNoise] : head
+  if (STEM_CANONICAL[head]) return STEM_CANONICAL[head]
+
+  const stem = trimEnding(head)
+  if (STEM_CANONICAL[stem]) return STEM_CANONICAL[stem]
+
+  // Двослівні назви на кшталт «куряче філе» лишаємо цілими, якщо друге слово змістовне
+  if (words.length >= 2 && words[1].length > 3) {
+    const two = `${head} ${words[1]}`
+    if (SYNONYMS[two]) return SYNONYMS[two]
+  }
+  return head
+}
+
+function trimEnding(word: string): string {
+  if (word.length <= 4) return word
+  for (const end of ENDINGS) {
+    if (word.endsWith(end) && word.length - end.length >= 3) {
+      return word.slice(0, word.length - end.length)
+    }
+  }
+  return word
+}
+
+/** Чи два продукти — це той самий інгредієнт (з урахуванням списку замін). */
+export function isSameIngredient(a: string, b: string, substitutes: string[] = []): boolean {
+  const na = normalizeProductName(a)
+  const nb = normalizeProductName(b)
+  if (na === nb) return true
+  return substitutes.map(normalizeProductName).includes(nb) || substitutes.map(normalizeProductName).includes(na)
+}
+
+/** Читабельна назва для UI: перша літера велика, решта як є. */
+export function displayName(raw: string): string {
+  const t = raw.trim()
+  return t.charAt(0).toUpperCase() + t.slice(1)
+}
+
+/**
+ * Категорія та місце зберігання за нормалізованим ключем.
+ * Використовується і для фото, і для позицій із чека.
+ */
+const CATEGORY_MAP: { keys: string[]; category: string; storage: string; shelfLifeDays: number }[] = [
+  { keys: ['молоко', 'вершки', 'сметана', 'йогурт', 'кефір', 'маскарпоне', 'сир', 'сир твердий', 'сир кисломолочний', 'масло вершкове', 'масло'], category: 'Молочні продукти', storage: 'fridge', shelfLifeDays: 7 },
+  { keys: ['яйця'], category: 'Яйця', storage: 'fridge', shelfLifeDays: 21 },
+  { keys: ['помідори', 'огірки', 'шпинат', 'салат', 'картопля', 'цибуля', 'часник', 'морква', 'яблука', 'банани', 'лимон', 'авокадо', 'перець'], category: 'Овочі та фрукти', storage: 'produce', shelfLifeDays: 5 },
+  { keys: ['макарони', 'рис', 'гречка', 'борошно', 'цукор', 'сіль', 'олія', 'какао', 'савоярді', 'печиво', 'хліб', 'мед', 'сода'], category: 'Бакалія', storage: 'pantry', shelfLifeDays: 180 },
+  { keys: ['кава', 'чай', 'сік', 'вода'], category: 'Напої', storage: 'drinks', shelfLifeDays: 365 },
+  { keys: ['куряче філе', 'фарш', 'свинина', 'яловичина', 'риба', 'лосось', 'ковбаса', 'бекон'], category: 'Мʼясо та риба', storage: 'fridge', shelfLifeDays: 3 },
+  { keys: ['морозиво', 'пельмені', 'заморожені овочі'], category: 'Заморожені продукти', storage: 'freezer', shelfLifeDays: 120 },
+  { keys: ['чипси', 'горіхи', 'шоколад', 'цукерки'], category: 'Снеки', storage: 'snacks', shelfLifeDays: 90 },
+]
+
+export interface CategoryGuess {
+  category: string
+  storageLocation: string
+  /** типовий строк придатності у днях від дати покупки — для інференсу з чеків */
+  shelfLifeDays: number
+}
+
+export function guessCategory(nameOrKey: string): CategoryGuess {
+  const key = normalizeProductName(nameOrKey)
+  for (const row of CATEGORY_MAP) {
+    if (row.keys.includes(key)) {
+      return { category: row.category, storageLocation: row.storage, shelfLifeDays: row.shelfLifeDays }
+    }
+  }
+  for (const row of CATEGORY_MAP) {
+    if (row.keys.some((k) => key.startsWith(k) || k.startsWith(key))) {
+      return { category: row.category, storageLocation: row.storage, shelfLifeDays: row.shelfLifeDays }
+    }
+  }
+  return { category: 'Інше', storageLocation: 'other', shelfLifeDays: 30 }
+}
+
+/** Одиниця за замовчуванням для інгредієнта. */
+export function defaultUnit(nameOrKey: string): Unit {
+  const key = normalizeProductName(nameOrKey)
+  if (['яйця'].includes(key)) return 'шт'
+  if (['молоко', 'вершки', 'олія', 'сік', 'вода'].includes(key)) return 'мл'
+  return 'г'
+}

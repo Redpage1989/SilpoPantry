@@ -18,9 +18,12 @@ export default async function RecipesPage() {
         </p>
       </header>
 
-      <div className="mb-4">
+      <div className="mb-4 grid grid-cols-2 gap-2">
         <LinkButton href="/plan" variant="secondary" full>
-          📅 Одразу спланувати весь тиждень
+          📅 Тиждень
+        </LinkButton>
+        <LinkButton href="/recipes/community" variant="secondary" full>
+          👨‍👩‍👧 Спільнота
         </LinkButton>
       </div>
 

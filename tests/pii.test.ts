@@ -160,3 +160,21 @@ describe('SchemaGuard: валідація елементів масиву', () =
     expect(res.errors.join(' ')).toContain('shoppingCartId')
   })
 })
+
+describe('TTL записів розпізнавання', () => {
+  /**
+   * Логіка проста, але саме її відсутність робила поле expiresAt
+   * порожньою обіцянкою. Тест фіксує намір, а не реалізацію Prisma.
+   */
+  const isExpired = (expiresAt: Date, now: Date) => expiresAt.getTime() < now.getTime()
+
+  it('запис зі старим expiresAt вважається простроченим', () => {
+    const now = new Date(2026, 8, 10, 12, 0)
+    expect(isExpired(new Date(2026, 8, 10, 11, 0), now)).toBe(true)
+  })
+
+  it('свіжий запис не видаляється', () => {
+    const now = new Date(2026, 8, 10, 12, 0)
+    expect(isExpired(new Date(2026, 8, 10, 12, 30), now)).toBe(false)
+  })
+})

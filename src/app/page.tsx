@@ -48,7 +48,7 @@ export default async function HomePage() {
   } catch (err) {
     return <DashboardUnavailable message={err instanceof Error ? err.message : 'Невідома помилка'} />
   }
-  const { household, expiring, suggestions, daysOfFood, cart, promos, loyalty, restock } = run.data
+  const { household, pantry, expiring, suggestions, daysOfFood, cart, promos, loyalty, restock } = run.data
   const now = new Date()
 
   return (
@@ -95,6 +95,33 @@ export default async function HomePage() {
       <div className="mb-5">
         <DishRequestBar />
       </div>
+
+      {/* Порожня комора — головна причина, чому новий користувач бачить
+          порожній екран і не розуміє, що робити далі. Підказка з дією. */}
+      {pantry.length === 0 && (
+        <Card className="mb-5 border border-accent-300">
+          <div className="flex gap-3">
+            <span className="text-2xl" aria-hidden>
+              🧺
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[16px] font-semibold leading-tight">Комора ще порожня</h2>
+              <p className="mt-1 text-[13px] leading-snug text-graphite-500">
+                Найшвидший спосіб — підтягнути ваші покупки з «Сільпо». Агент сам оцінить,
+                що ще лишилось удома, і почне пропонувати страви.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <LinkButton href="/pantry" full>
+              🧾 Імпорт із чеків
+            </LinkButton>
+            <LinkButton href="/scan" variant="secondary" full>
+              📸 Сфотографувати
+            </LinkButton>
+          </div>
+        </Card>
+      )}
 
       {/* Що приготуємо сьогодні */}
       <SectionTitle action={<Link href="/recipes" className="text-[13px] font-medium text-accent-600">Усі страви</Link>}>

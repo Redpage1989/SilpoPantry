@@ -14,12 +14,26 @@ const CSRF_COOKIE = 'sp_csrf'
 const OAUTH_COOKIE = 'sp_oauth'
 const MAX_AGE = 60 * 60 * 24 * 30
 
+/** Заглушка для локальної розробки. У продакшні використання заборонено. */
+const DEV_FALLBACK_SECRET = 'dev-only-insecure-secret-change-me'
+
 function secret(): string {
-  if (!config.sessionSecret) {
-    // у dev краще працювати з тимчасовим ключем, ніж падати на першому запиті
-    return 'dev-only-insecure-secret-change-me'
+  if (config.sessionSecret) return config.sessionSecret
+
+  /**
+   * Мовчазна деградація тут коштувала б дорого: на публічній адресі
+   * сесійні куки підписувалися б рядком, який лежить у відкритому коді,
+   * і будь-хто міг би підробити сесію. Один раз це вже сталося —
+   * .env не доїхав до контейнера, а застосунок запустився як ні в чому
+   * не бувало. Тому в продакшні падаємо голосно.
+   */
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'SESSION_SECRET не заданий. У продакшні заборонено підписувати сесії ' +
+        'відомим ключем із коду. Задайте SESSION_SECRET в .env і перезапустіть застосунок.',
+    )
   }
-  return config.sessionSecret
+  return DEV_FALLBACK_SECRET
 }
 
 function sign(value: string): string {

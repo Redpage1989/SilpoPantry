@@ -35,6 +35,9 @@ model User {
   agentRuns    AgentRun[]
   mcpSessions  McpSession[]
   imports      ReceiptImport[]
+  userRecipes  UserRecipe[]
+  recipeVotes  RecipeVote[]
+  weeklyAwards WeeklyAward[]
 
   @@index([silpoProfileId])
 }
@@ -252,4 +255,95 @@ model DemoCart {
   /// JSON-масив SilpoCartLine
   lines     String   @default("[]")
   updatedAt DateTime @updatedAt
+}
+
+/// Рецепт, доданий користувачем.
+///
+/// Окрема таблиця, а не рядки в Recipe: у користувацького рецепта інший
+/// життєвий цикл (модерація, голоси, автор) і принципово інший рівень
+/// довіри до складу. Змішувати їх означало б втратити цю різницю.
+model UserRecipe {
+  id        String   @id @default(cuid())
+  authorId  String
+  slug      String   @unique
+  title     String
+  summary   String
+  servings  Int      @default(2)
+  cookingTime Int    @default(30)
+  /// "easy" | "medium" | "hard"
+  difficulty String  @default("easy")
+  cuisine   String   @default("Українська")
+  /// "breakfast" | "lunch" | "dinner" | "dessert" | "snack"
+  mealType  String   @default("dinner")
+  /// JSON: [{ name, normalizedName, quantity, unit, recognized }]
+  ingredients String
+  /// JSON: [{ step, text, timerMinutes }]
+  steps     String
+  /// JSON: [{ kind, text }] — поради автора
+  tips      String   @default("[]")
+  imageEmoji String  @default("🍽️")
+
+  /// Алергени, ЗАЯВЛЕНІ автором. Єдине джерело правди для фільтра:
+  /// виводити їх із вільного тексту небезпечно (див. compositionVerified).
+  declaredAllergens String @default("[]")
+  /// Чи всі інгредієнти впізнані нормалізатором. Якщо ні — фільтр
+  /// алергенів не може дати гарантій, і це показується користувачу.
+  compositionVerified Boolean @default(false)
+  /// Інгредієнти, які не вдалося впізнати
+  unknownIngredients String  @default("[]")
+
+  /// "draft" | "published" | "hidden"
+  status    String   @default("published")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  votes  RecipeVote[]
+  awards WeeklyAward[]
+
+  @@index([status, createdAt])
+  @@index([authorId])
+}
+
+/// Голос за рецепт тижня. Один користувач — один голос на рецепт на тиждень.
+model RecipeVote {
+  id           String   @id @default(cuid())
+  userRecipeId String
+  voterId      String
+  /// ISO-тиждень у форматі "2026-W32" — щоб «рецепт тижня» був саме тижневим
+  isoWeek      String
+  createdAt    DateTime @default(now())
+
+  recipe UserRecipe @relation(fields: [userRecipeId], references: [id], onDelete: Cascade)
+  voter  User       @relation(fields: [voterId], references: [id], onDelete: Cascade)
+
+  @@unique([userRecipeId, voterId, isoWeek])
+  @@index([isoWeek])
+}
+
+/// Нагорода за рецепт тижня.
+///
+/// Створюється лише для ЗАКРИТОГО тижня і більше не перераховується: пізніші
+/// голоси не мають змінювати вже оголошеного переможця. Статус завжди
+/// починається з "pending" — застосунок не нараховує балабонуси сам, у MCP
+/// «Сільпо» немає інструмента запису лояльності (див. weekly-award.ts).
+model WeeklyAward {
+  id           String    @id @default(cuid())
+  /// "2026-W32" — один переможець на тиждень
+  isoWeek      String    @unique
+  userRecipeId String
+  authorId     String
+  /// Кількість голосів на момент закриття тижня — фіксується назавжди
+  votes        Int
+  /// Запропонований розмір призу. Пропозиція застосунку, не зобовʼязання «Сільпо»
+  prizeBalabonuses Int
+  /// "pending" | "granted" | "declined"
+  status       String    @default("pending")
+  createdAt    DateTime  @default(now())
+  grantedAt    DateTime?
+
+  recipe UserRecipe @relation(fields: [userRecipeId], references: [id], onDelete: Cascade)
+  author User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }

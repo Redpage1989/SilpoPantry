@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { config } from '@/lib/config'
 import { Badge, Card, LinkButton, SectionTitle } from '@/components/ui'
 import { McpProbe } from './McpProbe'
+import { AccountActions } from './AccountActions'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +60,8 @@ export default async function TracePage() {
           інтерфейсі вони не показуються навіть частково.
         </p>
       </Card>
+
+      <AccountActions linked={authorized} />
 
       <SectionTitle>Живий виклик MCP</SectionTitle>
       <McpProbe />

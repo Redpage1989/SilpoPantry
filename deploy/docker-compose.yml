@@ -12,21 +12,18 @@ services:
     # 8093 — перший вільний порт у ряду im.pl.ua (8090–8092 зайняті)
     ports:
       - "127.0.0.1:8093:3000"
+    # .env лежить у корені застосунку, а compose — у deploy/.
+    # Без явного env_file Compose шукав би .env поруч із собою й мовчки
+    # передав би в контейнер порожні значення: саме так SESSION_SECRET
+    # виявився незаданим на публічній адресі.
+    env_file:
+      - ../.env
+    # Тільки те, що має ПЕРЕВИЗНАЧАТИ .env: шляхи всередині контейнера.
+    # Решта змінних приходить із env_file — не дублюємо їх тут, інакше
+    # порожня змінна оболонки затре справжнє значення з файлу.
     environment:
       - NODE_ENV=production
-      - DATABASE_PROVIDER=sqlite
       - DATABASE_URL=file:/data/prod.db
-      - APP_BASE_URL=${APP_BASE_URL}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - SILPO_MCP_URL=${SILPO_MCP_URL:-https://mcp.silpo.ua/mcp}
-      - SILPO_MCP_MODE=${SILPO_MCP_MODE:-auto}
-      - SILPO_CLIENT_ID=${SILPO_CLIENT_ID:-}
-      - SILPO_CLIENT_SECRET=${SILPO_CLIENT_SECRET:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_VISION_MODEL=${ANTHROPIC_VISION_MODEL:-claude-opus-5}
-      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-8}
-      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-30}
-      - PHOTO_TTL_MINUTES=${PHOTO_TTL_MINUTES:-30}
     volumes:
       # БД переживає перезбірку образу; це єдиний стан застосунку
       - silpo-pantry-data:/data

@@ -45,6 +45,20 @@ export async function POST(request: Request) {
       })
     }
 
+    /**
+     * Чистимо прострочені записи ПЕРЕД створенням нового.
+     *
+     * Поле `expiresAt` існувало від початку, але його ніхто не перевіряв:
+     * TTL був обіцянкою в схемі, а не поведінкою. Прибирання тут, а не в
+     * cron, — свідомий вибір: окремий планувальник у прототипі це ще один
+     * механізм, який може тихо зупинитись і про це ніхто не дізнається.
+     * Сканування — єдине місце, де ці записи взагалі зʼявляються.
+     */
+    const purged = await prisma.recognitionJob.deleteMany({
+      where: { userId, expiresAt: { lt: new Date() } },
+    })
+    if (purged.count > 0) logEvent('info', 'scan.purged_expired', { count: purged.count })
+
     const expiresAt = new Date(Date.now() + config.limits.photoTtlMinutes * 60_000)
     const job = await prisma.recognitionJob.create({
       data: { userId, imageKey: `mem:${Date.now()}`, status: 'processing', expiresAt },

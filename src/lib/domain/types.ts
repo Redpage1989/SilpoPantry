@@ -47,7 +47,7 @@ export const SOURCE_LABELS: Record<PantrySource, string> = {
 }
 
 /** Одиниці, з якими працює домен. `pcs` — штуки. */
-export type Unit = 'г' | 'кг' | 'мл' | 'л' | 'шт' | 'ст.л' | 'ч.л' | 'пуч'
+export type Unit = 'г' | 'кг' | 'мл' | 'л' | 'шт' | 'ст.л' | 'ч.л' | 'пуч' | 'уп'
 
 export interface PantryEntry {
   id: string
@@ -176,6 +176,10 @@ export interface ProductOption {
   slug?: string
   /** філія, з якої доступний товар; обовʼязкова при додаванні в кошик */
   branchId?: string
+  /** ваговий товар: кількість задається кроком, а не штуками */
+  weighted?: boolean
+  /** чи є в наявності в обраній філії */
+  inStock?: boolean
   name: string
   brand?: string
   price: Kopiyky

@@ -11,11 +11,43 @@ import { DishRequestBar } from '@/components/DishRequestBar'
 
 export const dynamic = 'force-dynamic'
 
+function DashboardUnavailable({ message }: { message: string }) {
+  return (
+    <main className="safe-top px-4 pb-6 pt-4">
+      <h1 className="mb-4 text-[22px] font-bold tracking-tight">Сімейна комора</h1>
+      <Card className="text-center">
+        <div className="mb-2 text-4xl" aria-hidden>
+          🛠️
+        </div>
+        <h2 className="text-[16px] font-semibold">«Сільпо» тимчасово не відповідає</h2>
+        <p className="mt-1 text-[13px] text-graphite-500">
+          Це збій звʼязку із сервісом, а не втрата ваших даних. Спробуйте оновити сторінку.
+        </p>
+        <p className="mt-2 text-[11px] text-graphite-300">{message}</p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <LinkButton href="/" variant="secondary" full>
+            Оновити
+          </LinkButton>
+          <LinkButton href="/pantry" full>
+            До комори
+          </LinkButton>
+        </div>
+      </Card>
+    </main>
+  )
+}
+
 export default async function HomePage() {
   const userId = await getUserId()
   if (!userId) redirect('/login')
 
-  const run = await runDashboard(userId)
+  // Головна також не має падати через збій MCP — див. коментар у /cart
+  let run: Awaited<ReturnType<typeof runDashboard>>
+  try {
+    run = await runDashboard(userId)
+  } catch (err) {
+    return <DashboardUnavailable message={err instanceof Error ? err.message : 'Невідома помилка'} />
+  }
   const { household, expiring, suggestions, daysOfFood, cart, promos, loyalty, restock } = run.data
   const now = new Date()
 

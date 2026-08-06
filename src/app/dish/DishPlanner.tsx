@@ -277,7 +277,12 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                                 </Badge>
                                 <div className="mt-1 text-[14px] font-medium leading-tight">{t.product.name}</div>
                                 <div className="text-[11px] text-graphite-500">
-                                  {t.quantity} × {t.product.packSize} {t.product.unit}
+                                  {/* «1 × 1 уп» нічого не повідомляє — каталог не дав ваги */}
+                                  {t.product.unit === 'уп'
+                                    ? t.quantity === 1
+                                      ? '1 упаковка'
+                                      : `${t.quantity} упаковки`
+                                    : `${t.quantity} × ${t.product.packSize} ${t.product.unit}`}
                                   {t.product.rating ? ` · ${t.product.rating}★` : ''}
                                 </div>
                                 <div className="mt-1 text-[11px] text-graphite-500">{t.rationale}</div>

@@ -6,7 +6,7 @@ import { analyzePantryPhotos, enrichRecognizedItem, type PhotoInput } from '@/li
 import { inferPantryFromReceipts } from '@/lib/domain/receipts'
 import { calculateMissingIngredients } from '@/lib/domain/matching'
 import { rankRecipes, formatUah } from '@/lib/domain/scoring'
-import { buildTiers, compareCookVsReady, sumBasket } from '@/lib/domain/pricing'
+import { buildTiers, compareCookVsReady, sumBasket, estimateServingsPerPack } from '@/lib/domain/pricing'
 import { findExpiringProducts, planDeduction, estimateDaysOfFood, expiryStatus } from '@/lib/domain/pantry'
 import { checkProductAgainstRestrictions } from '@/lib/domain/restrictions'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
@@ -528,18 +528,25 @@ export async function compareCookVsReadyMeal(
     if (ctx.adapter instanceof MockSilpoAdapter) {
       readyProducts = await ctx.adapter.findReadyMeals(params.readyKey)
     } else {
+      // Каталог «Сільпо» шукає за точною фразою: «тірамісу» дає 5 товарів,
+      // а «тірамісу готовий десерт кулінарія» — жодного. Тому запит — лише назва.
       const res = await ctx.adapter.findProducts([
-        { ingredientKey: params.readyKey, query: `${params.recipe.title} готовий десерт кулінарія`, limit: 5 },
+        { ingredientKey: params.readyKey, query: params.recipe.title, limit: 8 },
       ])
-      readyProducts = res[0]?.products ?? []
+      readyProducts = res[0]?.products.filter((p) => isPlausibleReadyMeal(p.name, params.recipe.title)) ?? []
     }
 
-    // обираємо найдешевший за порцію варіант
-    const best = readyProducts
-      .map((p) => ({ p, perServing: (p.promoPrice ?? p.price) / Math.max(1, Math.round(p.packSize / 100)) }))
-      .sort((a, b) => a.perServing - b.perServing)[0]?.p ?? null
+    // Обираємо найдешевший ЗА ПОРЦІЮ, а не за упаковку: торт на 6 порцій
+    // за 279 грн вигідніший за тістечко за 174 грн, хоч і дорожчий на ціннику.
+    const ranked = readyProducts
+      .map((p) => {
+        const servings = estimateServingsPerPack(p.name, p.packSize, p.unit)
+        return { p, servings, perServing: (p.promoPrice ?? p.price) / servings }
+      })
+      .sort((a, b) => a.perServing - b.perServing)
 
-    const servingsPerPack = best ? Math.max(1, Math.round(best.packSize / 100)) : 1
+    const best = ranked[0]?.p ?? null
+    const servingsPerPack = ranked[0]?.servings ?? 1
     const comparison = compareCookVsReady({
       missingCost: params.missingCost,
       missingCostConsumed: params.missingCostConsumed,
@@ -562,6 +569,21 @@ export async function compareCookVsReadyMeal(
       },
     }
   })
+}
+
+/**
+ * Чи справді це готовий аналог страви, а не товар «зі смаком».
+ * Пошук за словом «тірамісу» повертає і торт, і шоколад «смак тірамісу»,
+ * і морозиво — порівнювати ціну порції з шоколадкою було б безглуздо.
+ */
+export function isPlausibleReadyMeal(productName: string, dishTitle: string): boolean {
+  const name = productName.toLowerCase()
+  const dish = dishTitle.toLowerCase()
+  if (!name.includes(dish.split(' ')[0])) return false
+  // «зі смаком X» — це ароматизований продукт, а не сама страва
+  if (name.includes('смак')) return false
+  const NOT_A_DISH = ['шоколад', 'морозиво', 'напій', 'сироп', 'кава', 'йогурт', 'печиво', 'батончик', 'цукерк']
+  return !NOT_A_DISH.some((w) => name.includes(w))
 }
 
 // ─────────────────────────── 5. Пропозиція та кошик ───────────────────────────
@@ -590,6 +612,14 @@ export async function createShoppingProposal(
   return step(ctx, 'createShoppingProposal', { goal: params.goal, lines: params.lines.length }, async () => {
     const totals = sumBasket(params.lines)
     const confirmationToken = randomBytes(24).toString('base64url')
+
+    // Кожне відкриття екрана страви створювало нову чернетку, і на екрані
+    // кошика накопичувались однакові пропозиції. Попередні чернетки з тією
+    // самою метою скасовуємо — актуальною лишається одна.
+    const superseded = await prisma.shoppingProposal.updateMany({
+      where: { userId: ctx.userId, goal: params.goal, status: 'draft' },
+      data: { status: 'cancelled' },
+    })
     const proposal = await prisma.shoppingProposal.create({
       data: {
         userId: ctx.userId,
@@ -604,7 +634,7 @@ export async function createShoppingProposal(
     })
     return {
       result: { proposalId: proposal.id, confirmationToken, total: totals.total },
-      summary: `Пропозиція на ${params.lines.length} товарів, ${formatUah(totals.total)}. Кошик НЕ змінено — чекаємо підтвердження.`,
+      summary: `Пропозиція на ${params.lines.length} товарів, ${formatUah(totals.total)}. Кошик НЕ змінено — чекаємо підтвердження.${superseded.count > 0 ? ` Замінено попередніх чернеток: ${superseded.count}.` : ''}`,
       output: { lines: params.lines.length, total: totals.total, status: 'draft' },
     }
   })

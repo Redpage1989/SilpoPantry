@@ -14,6 +14,9 @@ import { logEvent } from './pii'
 
 export const MCP_PROTOCOL_VERSION = '2025-06-18'
 
+/** Коди шлюзу: запит не дійшов до застосунку, повтор безпечний. */
+const GATEWAY_ERRORS = new Set([502, 503, 504])
+
 export interface JsonRpcError {
   code: number
   message: string
@@ -96,9 +99,12 @@ export class McpHttpClient {
      * Під час демонстрації журі це виглядало б як зламаний застосунок,
      * тому одиничний збій має бути невидимим.
      *
-     * Ретраїмо ЛИШЕ транспортні помилки. HTTP-відповідь будь-якого коду —
-     * це вже відповідь сервера, і повторювати її не можна: tools/call
-     * може виявитись не ідемпотентним.
+     * Ретраїмо транспортні помилки і шлюзові 502/503/504.
+     *
+     * 502 від mcp.silpo.ua під час живого прогону поклав увесь екран кошика:
+     * це відповідь балансувальника, а не застосунку, тобто запит до MCP
+     * навіть не дійшов. Інші коди (4xx, 500) не повторюємо — там уже
+     * відповів сервер, і tools/call може бути не ідемпотентним.
      */
     const attempts = this.options.retries ?? 3
     let res: Response | null = null
@@ -116,6 +122,13 @@ export class McpHttpClient {
           cache: 'no-store',
         })
         clearTimeout(timer)
+        // Шлюзова помилка: запит не дійшов до MCP — можна безпечно повторити
+        if (GATEWAY_ERRORS.has(res.status) && attempt < attempts) {
+          logEvent('warn', 'mcp.gateway_retry', { method, status: res.status, attempt, of: attempts })
+          await new Promise((r) => setTimeout(r, 500 * attempt))
+          res = null
+          continue
+        }
         break
       } catch (err) {
         clearTimeout(timer)

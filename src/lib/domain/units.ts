@@ -6,7 +6,7 @@ import type { Unit } from './types'
  * бо в рецептах точність «1 ст.л = 15 мл» цілком достатня.
  */
 
-type Dimension = 'mass' | 'volume' | 'count'
+type Dimension = 'mass' | 'volume' | 'count' | 'pack'
 
 const TO_BASE: Record<Unit, { dim: Dimension; factor: number }> = {
   'г': { dim: 'mass', factor: 1 },
@@ -17,6 +17,8 @@ const TO_BASE: Record<Unit, { dim: Dimension; factor: number }> = {
   'ст.л': { dim: 'volume', factor: 15 },
   'ч.л': { dim: 'volume', factor: 5 },
   'пуч': { dim: 'mass', factor: 40 },
+  // «упаковка» — окремий вимір: розмір невідомий, тож ні з чим не конвертується
+  'уп': { dim: 'pack', factor: 1 },
 }
 
 export function dimensionOf(unit: Unit): Dimension {

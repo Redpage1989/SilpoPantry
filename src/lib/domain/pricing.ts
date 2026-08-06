@@ -92,7 +92,12 @@ export function buildTiers(options: ProductOption[], missing: MissingIngredient)
   }).p
 
   const pick: { tier: ProductTier; product: ProductOption; rationale: string }[] = [
-    { tier: 'budget', product: cheapest, rationale: 'Найнижча ціна за 100 г/мл серед знайдених' },
+    {
+      tier: 'budget',
+      product: cheapest,
+      // якщо ваги упаковки каталог не дав — не вигадуємо «за 100 г»
+      rationale: cheapest.unit === 'уп' ? 'Найнижча ціна серед знайдених' : 'Найнижча ціна за 100 г/мл серед знайдених',
+    },
     {
       tier: 'optimal',
       product: best,
@@ -144,6 +149,27 @@ export function sumBasket(lines: { lineTotal: Kopiyky; promoSaving: Kopiyky; qua
     total: subtotal - promoSaving,
     itemCount: lines.reduce((s, l) => s + l.quantity, 0),
   }
+}
+
+/**
+ * Скільки порцій дає готовий товар.
+ *
+ * Каталог «Сільпо» не повертає ані ваги, ані кількості порцій, тому це
+ * свідома евристика за типом виробу — інакше агент порівнював би
+ * «6 тістечок по 174 грн» з домашнім тортом і давав абсурдну суму.
+ * Евристика показується користувачу текстом, а не ховається в коді.
+ */
+export function estimateServingsPerPack(name: string, packSize?: number, unit?: Unit): number {
+  const n = name.toLowerCase()
+  // Навмисно без regex із \b: межа слова в JS працює за ASCII, тому
+  // шаблон «\bторт» ніколи не збігається з кирилицею. Простий includes надійніший.
+  const SINGLE = ['тістечк', 'піроженк', 'порці', 'стакан', 'кекс', 'капкейк', 'еклер']
+  const SHARED = ['торт', 'пиріг', 'чізкейк', 'рулет']
+  if (SINGLE.some((w) => n.includes(w))) return 1
+  if (SHARED.some((w) => n.includes(w))) return 6
+  // якщо вага відома — рахуємо з розрахунку ~120 г на порцію десерту
+  if (packSize && unit === 'г' && packSize >= 200) return Math.max(1, Math.round(packSize / 120))
+  return 1
 }
 
 export interface CookVsReadyResult {

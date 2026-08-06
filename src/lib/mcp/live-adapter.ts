@@ -1,4 +1,5 @@
 import type { ProductOption, Unit } from '@/lib/domain/types'
+import { parsePackFromName } from '@/lib/domain/receipts'
 import { McpHttpClient, extractToolJson, type McpToolDefinition } from './client'
 import { buildRegistry, describeSchema, resolveTool, validateArgs, type ToolRegistry } from './schema-guard'
 import {
@@ -566,6 +567,14 @@ function toKopiyky(value: number | undefined): number | undefined {
  * звичайна. Тому promoPrice = price тоді й лише тоді, коли oldPrice більший.
  * Ціни приходять у гривнях цілим числом, ми ж скрізь рахуємо в копійках.
  */
+/**
+ * Пошук «Сільпо» повертає: id, name, slug, price, oldPrice, stock, available,
+ * weighted, step, companyId, branchId. Розміру упаковки в ньому НЕМАЄ.
+ *
+ * Тому вагу дістаємо з назви («Печиво Савоярді, 200 г»), а якщо її там немає —
+ * чесно кажемо «упаковка» замість вигаданих «1 шт». Раніше UI показував
+ * «1 × 1 шт» для всього підряд, і це виглядало як помилка розрахунку.
+ */
 function toProductOption(raw: unknown): ProductOption | null {
   if (!raw || typeof raw !== 'object') return null
   const o = unwrap(raw as Record<string, unknown>)
@@ -573,17 +582,28 @@ function toProductOption(raw: unknown): ProductOption | null {
   const name = pickString(o, ['name', 'title', 'productName'])
   if (!productId || !name) return null
 
-  const current = toKopiyky(pickNumber(o, ['price', 'currentPrice'])) ?? 0
-  const old = toKopiyky(pickNumber(o, ['oldPrice', 'regularPrice']))
-  const hasPromo = old !== undefined && old > current && current > 0
+  const price = toKopiyky(pickNumber(o, ['price', 'currentPrice'])) ?? 0
+  const oldPrice = toKopiyky(pickNumber(o, ['oldPrice', 'regularPrice']))
+  // у «Сільпо» знижка виражена як price < oldPrice, окремого promoPrice немає
+  const hasPromo = oldPrice !== undefined && oldPrice > price && price > 0
 
-  /**
-   * Вагу беремо з назви, бо batch-пошук «Сільпо» її окремим полем не віддає.
-   * Якщо в назві її немає — це НЕ «1 г», а «одна упаковка невідомої ваги».
-   * Різниця принципова: інакше ціна за 100 г вийшла б у сотні разів завищена
-   * і зламала б поділ на бюджетний/оптимальний/преміальний.
-   */
-  const pack = parsePackFromTitle(name) ?? fallbackPack(o)
+  const weighted = o.weighted === true
+  const step = pickNumber(o, ['step', 'addToBasketStep'])
+  const fromName = parsePackFromName(name)
+
+  let packSize: number
+  let unit: Unit
+  if (weighted) {
+    // ваговий товар: крок додавання і є мінімальною порцією, зазвичай у кг
+    packSize = step && step > 0 ? step * 1000 : 100
+    unit = 'г'
+  } else if (fromName) {
+    packSize = fromName.size
+    unit = fromName.unit
+  } else {
+    packSize = 1
+    unit = 'уп'
+  }
 
   return {
     productId,
@@ -592,29 +612,15 @@ function toProductOption(raw: unknown): ProductOption | null {
     slug: pickString(o, ['slug']),
     name,
     brand: pickString(o, ['brand', 'trademark']),
-    price: hasPromo ? old! : current,
-    promoPrice: hasPromo ? current : undefined,
-    unit: pack.unit,
-    packSize: pack.size,
+    price: hasPromo ? oldPrice! : price,
+    promoPrice: hasPromo ? price : undefined,
+    unit,
+    packSize,
+    weighted,
+    inStock: o.available !== false,
     rating: pickNumber(o, ['rating', 'score']),
     allergens: Array.isArray(o.allergens) ? (o.allergens as unknown[]).map(String) : undefined,
   }
-}
-
-/** Коли ваги немає ніде — товар рахується як одна штука-упаковка. */
-function fallbackPack(o: Record<string, unknown>): { size: number; unit: Unit } {
-  const explicit = pickNumber(o, ['packSize', 'weight', 'volume'])
-  if (explicit && explicit > 1) return { size: explicit, unit: 'г' }
-  return { size: 1, unit: 'шт' }
-}
-
-/** «Сир Ghidetti «Маскарпоне» 45%, 250 г» → { size: 250, unit: 'г' } */
-function parsePackFromTitle(title: string): { size: number; unit: Unit } | null {
-  const m = /(\d+[.,]?\d*)\s*(кг|мл|л|шт|г)(?!\p{L})/iu.exec(title)
-  if (!m) return null
-  const size = Number(m[1].replace(',', '.'))
-  if (!Number.isFinite(size) || size <= 0) return null
-  return { size, unit: m[2].toLowerCase() as Unit }
 }
 
 function toOrder(raw: unknown, kind: SilpoOrder['kind']): SilpoOrder {
@@ -714,6 +720,9 @@ function normalizeValidations(raw: unknown): string[] {
     'product.offer.stock.max': 'Доступна менша кількість, ніж у кошику',
     'product.offer.stock.zero': 'Товар закінчився',
     'cart.min_order_cost': 'Сума менша за мінімальну для доставки',
+    'timeslot.not_found': 'Обраний час доставки вже недоступний — оберіть інший',
+    'order.adult.is_not_confirmed': 'У кошику є товари 18+ — потрібне підтвердження віку',
+    'order.payment_types.disabled': 'Для цього кошика недоступні деякі способи оплати',
   }
   return raw
     .map((v) => {

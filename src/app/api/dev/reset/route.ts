@@ -19,6 +19,18 @@ export async function POST() {
   }
   try {
     const userId = (await getUserId()) ?? 'demo-user'
+
+    /**
+     * Демо-користувач має лишатись демонстраційним ЗАВЖДИ.
+     * Якщо до нього прив'язана жива MCP-сесія, тести починають ходити
+     * в реальний «Сільпо» і падають на бейджі DEMO MODE. Тому відв'язуємо
+     * токен саме від demo-user — сесії інших користувачів не чіпаємо.
+     */
+    if (userId === 'demo-user') {
+      await prisma.mcpSession.deleteMany({ where: { userId } })
+      await prisma.user.updateMany({ where: { id: userId }, data: { authMode: 'demo' } })
+    }
+
     await resetDemoCart(userId)
     await seedRecipes(prisma)
     const result = await seedDemoUser(prisma, userId)

@@ -8,7 +8,9 @@ import {
   buildTiers,
   sumBasket,
   compareCookVsReady,
+  estimateServingsPerPack,
 } from '@/lib/domain/pricing'
+import { isPlausibleReadyMeal } from '@/lib/agent/tools'
 
 function product(over: Partial<ProductOption> & { productId: string }): ProductOption {
   return {
@@ -192,5 +194,49 @@ describe('готувати вдома vs купити готове', () => {
     })
     expect(res.ready?.quantity).toBe(2)
     expect(res.ready?.totalCost).toBe(29900 * 2)
+  })
+})
+
+describe('відбір готових аналогів страви', () => {
+  it('приймає торт і тістечко як готовий аналог', () => {
+    expect(isPlausibleReadyMeal('Торт «Степанків» «Тірамісу»', 'Тірамісу')).toBe(true)
+    expect(isPlausibleReadyMeal('Тістечко Biscotti Тірамісу бісквітне', 'Тірамісу')).toBe(true)
+  })
+
+  it('відкидає товари «зі смаком» — це не страва', () => {
+    expect(isPlausibleReadyMeal('Шоколад «Світоч» «Десерт» смак тірамісу', 'Тірамісу')).toBe(false)
+    expect(isPlausibleReadyMeal('Морозиво Tonitto зі смаком тірамісу з кавовою начинкою', 'Тірамісу')).toBe(false)
+  })
+
+  it('відкидає товар, у назві якого страви немає', () => {
+    expect(isPlausibleReadyMeal('Сир Маскарпоне 78%', 'Тірамісу')).toBe(false)
+  })
+})
+
+describe('оцінка порцій у готовому товарі', () => {
+  it('тістечко — одна порція, торт — шість', () => {
+    expect(estimateServingsPerPack('Тістечко Biscotti Тірамісу бісквітне')).toBe(1)
+    expect(estimateServingsPerPack('Торт «Степанків» «Тірамісу»')).toBe(6)
+  })
+
+  it('кирилиця розпізнається (regex із \\b тут не працює)', () => {
+    // саме на цьому падала попередня реалізація: /\bторт/ ніколи не збігався
+    expect(estimateServingsPerPack('Торт Наполеон')).toBeGreaterThan(1)
+    expect(estimateServingsPerPack('Чізкейк Нью-Йорк')).toBeGreaterThan(1)
+  })
+
+  it('за відомою вагою рахує ~120 г на порцію', () => {
+    expect(estimateServingsPerPack('Десерт вагою', 600, 'г')).toBe(5)
+  })
+
+  it('невідомий товар — одна порція, без вигадок', () => {
+    expect(estimateServingsPerPack('Щось незрозуміле')).toBe(1)
+  })
+
+  it('торт на 6 порцій виграє в тістечка попри вищий цінник', () => {
+    const cake = { name: 'Торт «Степанків» «Тірамісу»', price: 27900 }
+    const pastry = { name: 'Тістечко Biscotti Тірамісу', price: 17400 }
+    const perServing = (p: { name: string; price: number }) => p.price / estimateServingsPerPack(p.name)
+    expect(perServing(cake)).toBeLessThan(perServing(pastry))
   })
 })

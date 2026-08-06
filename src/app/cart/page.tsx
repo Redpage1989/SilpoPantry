@@ -11,7 +11,17 @@ export default async function CartPage() {
   const userId = await getUserId()
   if (!userId) redirect('/login')
 
-  const run = await runCartOverview(userId)
+  /**
+   * MCP може віддати транзитний 502 — під час живого прогону це поклало
+   * весь екран кошика. Жоден збій зовнішнього сервісу не має призводити
+   * до білого екрана: показуємо зрозуміле пояснення і кнопку «Оновити».
+   */
+  let run: Awaited<ReturnType<typeof runCartOverview>>
+  try {
+    run = await runCartOverview(userId)
+  } catch (err) {
+    return <CartUnavailable message={err instanceof Error ? err.message : 'Невідома помилка'} />
+  }
   const { cart, loyalty, coupons, slots, pendingProposals } = run.data
   const availableSlots = slots.filter((s) => s.available)
 
@@ -168,6 +178,33 @@ export default async function CartPage() {
         Будь-яка зміна кошика виконується лише після вашого підтвердження. Агент не додає й не
         видаляє товари самостійно.
       </p>
+    </main>
+  )
+}
+
+/** Екран «сервіс тимчасово недоступний» — без технічних подробиць у обличчя. */
+function CartUnavailable({ message }: { message: string }) {
+  return (
+    <main className="safe-top px-4 pb-6 pt-4">
+      <h1 className="mb-4 text-[22px] font-bold tracking-tight">Кошик</h1>
+      <Card className="text-center">
+        <div className="mb-2 text-4xl" aria-hidden>
+          🛠️
+        </div>
+        <h2 className="text-[16px] font-semibold">«Сільпо» тимчасово не відповідає</h2>
+        <p className="mt-1 text-[13px] text-graphite-500">
+          Кошик не вдалося завантажити. Ваші товари на місці — це збій звʼязку, а не втрата даних.
+        </p>
+        <p className="mt-2 text-[11px] text-graphite-300">{message}</p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <LinkButton href="/cart" variant="secondary" full>
+            Оновити
+          </LinkButton>
+          <LinkButton href="/recipes" full>
+            До страв
+          </LinkButton>
+        </div>
+      </Card>
     </main>
   )
 }

@@ -147,7 +147,7 @@ export function RecipeFinder() {
 
           <Row label="Кухня">
             <div className="flex flex-wrap gap-1.5">
-              {['Українська', 'Італійська', 'Азійська', 'Американська'].map((c) => (
+              {['Українська', 'Італійська', 'Азійська', 'Середземноморська', 'Американська'].map((c) => (
                 <Chip key={c} active={cuisine === c} onClick={() => setCuisine(cuisine === c ? '' : c)}>
                   {c}
                 </Chip>

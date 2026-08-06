@@ -10,7 +10,7 @@ import { formatUah } from '@/lib/domain/scoring'
 import { formatQuantity } from '@/lib/domain/units'
 import { AllergyWarning, Badge, Card, SectionTitle } from '@/components/ui'
 import { RecipeActions } from './RecipeActions'
-import type { Restriction } from '@/lib/domain/types'
+import { TIP_EMOJI, TIP_LABELS, type Restriction } from '@/lib/domain/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -164,6 +164,29 @@ export default async function RecipePage({
           ))}
         </ol>
       </Card>
+
+      {recipe.tips && recipe.tips.length > 0 && (
+        <>
+          <SectionTitle>Поради</SectionTitle>
+          <Card className="mb-4" padded={false}>
+            <ul className="divide-y divide-cream-200">
+              {recipe.tips.map((tip, i) => (
+                <li key={i} className="flex gap-3 px-4 py-3">
+                  <span className="text-base leading-none" aria-hidden>
+                    {TIP_EMOJI[tip.kind]}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-graphite-300">
+                      {TIP_LABELS[tip.kind]}
+                    </div>
+                    <p className="mt-0.5 text-[13px] leading-snug text-graphite-700">{tip.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </>
+      )}
 
       <Card className="bg-cream-50">
         <div className="flex justify-between text-[13px]">

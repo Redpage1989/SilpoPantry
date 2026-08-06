@@ -28,3 +28,4 @@ docs/live-mcp-proof/*.json
 coverage/
 
 .DS_Store
+prisma/recipes.json

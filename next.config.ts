@@ -2,6 +2,8 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // standalone: у контейнер їде мінімальний рантайм замість усього node_modules
+  output: 'standalone',
   // прибираємо dev-оверлей: він перекриває нижню навігацію на 390px
   devIndicators: false,
   serverExternalPackages: ['@prisma/client'],

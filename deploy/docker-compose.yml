@@ -1,0 +1,46 @@
+# «Сільпо: Сімейна комора» — прототип хакатону.
+# Слухає ЛИШЕ 127.0.0.1: назовні застосунок публікує Cloudflare Tunnel.
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: silpo-pantry:latest
+    container_name: silpo-pantry
+    restart: unless-stopped
+    # 8093 — перший вільний порт у ряду im.pl.ua (8090–8092 зайняті)
+    ports:
+      - "127.0.0.1:8093:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PROVIDER=sqlite
+      - DATABASE_URL=file:/data/prod.db
+      - APP_BASE_URL=${APP_BASE_URL}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - SILPO_MCP_URL=${SILPO_MCP_URL:-https://mcp.silpo.ua/mcp}
+      - SILPO_MCP_MODE=${SILPO_MCP_MODE:-auto}
+      - SILPO_CLIENT_ID=${SILPO_CLIENT_ID:-}
+      - SILPO_CLIENT_SECRET=${SILPO_CLIENT_SECRET:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_VISION_MODEL=${ANTHROPIC_VISION_MODEL:-claude-opus-5}
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-8}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-30}
+      - PHOTO_TTL_MINUTES=${PHOTO_TTL_MINUTES:-30}
+    volumes:
+      # БД переживає перезбірку образу; це єдиний стан застосунку
+      - silpo-pantry-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  silpo-pantry-data:

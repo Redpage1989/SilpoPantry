@@ -117,6 +117,37 @@ export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   hard: 'Складно',
 }
 
+/**
+ * Порада з приготування.
+ *
+ * Виділена в окремий тип, бо поради бувають різного призначення:
+ * техніка (як не зіпсувати), заміна (чим замінити), зберігання
+ * (що робити із залишками — це прямо працює на зменшення відходів)
+ * і безпека (де можна нашкодити собі).
+ */
+export type TipKind = 'technique' | 'substitute' | 'storage' | 'safety' | 'kids'
+
+export interface CookingTip {
+  kind: TipKind
+  text: string
+}
+
+export const TIP_LABELS: Record<TipKind, string> = {
+  technique: 'Техніка',
+  substitute: 'Заміна',
+  storage: 'Зберігання',
+  safety: 'Безпека',
+  kids: 'Для дітей',
+}
+
+export const TIP_EMOJI: Record<TipKind, string> = {
+  technique: '👩‍🍳',
+  substitute: '🔄',
+  storage: '🧊',
+  safety: '⚠️',
+  kids: '🧒',
+}
+
 export interface RecipeLike {
   id: string
   slug: string
@@ -132,6 +163,8 @@ export interface RecipeLike {
   nutrition: { kcal: number; protein: number; fat: number; carbs: number }
   tags: string[]
   imageEmoji: string
+  /** практичні поради саме до цієї страви */
+  tips?: CookingTip[]
 }
 
 export type RestrictionType = 'allergy' | 'intolerance' | 'diet' | 'dislike' | 'religious'

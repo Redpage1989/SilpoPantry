@@ -46,10 +46,19 @@ export async function POST(request: Request) {
 
     // Якщо користувач змінив вибір — перезаписуємо рядки пропозиції перед додаванням
     if (input.lines && input.lines.length > 0) {
+      /**
+       * Статус тут навмисно НЕ перевіряємо.
+       *
+       * Нова пропозиція скасовує попередні з тією ж метою (щоб екран кошика
+       * не заростав дублями). Але користувач може дивитись на екран, який
+       * побудували раніше, — і його підтвердження має спрацювати. Гарантією
+       * є одноразовий confirmationToken, а не статус рядка; повторне
+       * додавання все одно відсікається перевіркою `added_to_cart`.
+       */
       const proposal = await prisma.shoppingProposal.findFirst({
-        where: { id: input.proposalId, userId, status: 'draft' },
+        where: { id: input.proposalId, userId },
       })
-      if (!proposal) throw new Error('Чернетку пропозиції не знайдено')
+      if (!proposal) throw new Error('Пропозицію не знайдено')
       const total = input.lines.reduce((s, l) => s + l.lineTotal, 0)
       await prisma.shoppingProposal.update({
         where: { id: proposal.id },

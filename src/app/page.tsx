@@ -79,14 +79,17 @@ export default async function HomePage() {
           </span>
           <span className="text-[14px] font-semibold leading-tight">Сфотографувати холодильник</span>
         </Link>
-        <div className="flex min-h-[92px] flex-col justify-between rounded-[var(--radius-card)] bg-white p-4 shadow-[0_2px_14px_rgba(34,31,28,0.06)]">
+        <Link
+          href="/plan"
+          className="flex min-h-[92px] flex-col justify-between rounded-[var(--radius-card)] bg-white p-4 shadow-[0_2px_14px_rgba(34,31,28,0.06)] active:bg-cream-100"
+        >
           <span className="text-2xl" aria-hidden>
-            🍽️
+            📅
           </span>
           <span className="text-[14px] font-semibold leading-tight text-graphite-900">
-            Хочу приготувати конкретну страву
+            Спланувати тиждень
           </span>
-        </div>
+        </Link>
       </div>
 
       <div className="mb-5">
@@ -237,7 +240,10 @@ export default async function HomePage() {
         )}
       </Card>
 
-      <div className="flex gap-3">
+      <div className="grid grid-cols-2 gap-3">
+        <LinkButton href="/plan" variant="secondary" full>
+          Раціон на тиждень
+        </LinkButton>
         <LinkButton href="/trace" variant="secondary" full>
           Як працює агент
         </LinkButton>

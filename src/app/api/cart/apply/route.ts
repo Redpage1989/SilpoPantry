@@ -14,10 +14,11 @@ const Input = z.object({ proposalId: z.string().min(1) })
 export async function POST(request: Request) {
   return handle(request, { mutating: true, rateLimitPerMinute: 10 }, async (userId) => {
     const { proposalId } = Input.parse(await request.json())
+    // статус не фільтруємо — гарантією є токен усередині addConfirmedItemsToCart
     const proposal = await prisma.shoppingProposal.findFirst({
-      where: { id: proposalId, userId, status: 'draft' },
+      where: { id: proposalId, userId },
     })
-    if (!proposal) throw new Error('Чернетку не знайдено або вже підтверджено')
+    if (!proposal) throw new Error('Пропозицію не знайдено')
 
     const ctx = await createToolContext(userId)
     const cart = await addConfirmedItemsToCart(ctx, {

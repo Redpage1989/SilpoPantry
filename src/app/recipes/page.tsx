@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getUserId } from '@/lib/session'
-import { Card } from '@/components/ui'
+import { Card, LinkButton } from '@/components/ui'
 import { RecipeFinder } from './RecipeFinder'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +17,12 @@ export default async function RecipesPage() {
           Агент рахує, що вже є вдома, і сортує страви за прозорими правилами
         </p>
       </header>
+
+      <div className="mb-4">
+        <LinkButton href="/plan" variant="secondary" full>
+          📅 Одразу спланувати весь тиждень
+        </LinkButton>
+      </div>
 
       <RecipeFinder />
 

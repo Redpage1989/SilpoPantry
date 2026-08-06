@@ -10,6 +10,7 @@ import { buildTiers, compareCookVsReady, sumBasket, estimateServingsPerPack } fr
 import { findExpiringProducts, planDeduction, estimateDaysOfFood, expiryStatus } from '@/lib/domain/pantry'
 import { checkProductAgainstRestrictions } from '@/lib/domain/restrictions'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
+import { buildWeeklyPlan, countMeals, describePlan, type WeeklyPlan } from '@/lib/domain/mealplan'
 import { normalizeProductName, displayName } from '@/lib/domain/normalize'
 import type {
   HouseholdContext,
@@ -452,6 +453,94 @@ export async function calculateMissingIngredientsTool(
       output: coverage.missing.map((m) => ({ name: m.name, missing: m.missing, unit: m.unit, kind: m.kind })),
     }
   })
+}
+
+/**
+ * Планування раціону на кілька днів уперед.
+ *
+ * Відрізняється від generateRecipeOptions тим, що симулює споживання:
+ * комора вичерпується від страви до страви, тож список покупок на тиждень
+ * рахується чесно, без подвійного зарахування тих самих продуктів.
+ */
+export async function generateWeeklyPlan(
+  ctx: ToolContext,
+  input: { days?: number; mealsPerDay?: number; budget?: number | null },
+  household: HouseholdContext,
+  pantry: PantryEntry[],
+) {
+  return step(ctx, 'generateWeeklyPlan', input, async () => {
+    const plan = buildWeeklyPlan({
+      recipes: SEED_RECIPES,
+      pantry,
+      household,
+      days: input.days,
+      mealsPerDay: input.mealsPerDay,
+      budget: input.budget,
+      now: ctx.now,
+    })
+    return {
+      result: plan,
+      summary: `${describePlan(plan)}${plan.budget.withinBudget ? '' : ' · бюджет перевищено'}`,
+      output: {
+        days: plan.days.length,
+        meals: countMeals(plan),
+        shoppingList: plan.shoppingList.length,
+        totalCost: plan.totalMissingCost,
+        rescued: plan.rescuedProducts.length,
+        atRisk: plan.atRiskProducts.length,
+      },
+    }
+  })
+}
+
+/** WRITE. Зберігає затверджений план у календар харчування. */
+export async function saveMealPlan(
+  ctx: ToolContext,
+  params: { plan: WeeklyPlan; confirmationToken: string },
+) {
+  if (!params.confirmationToken) throw new ConfirmationRequiredError()
+  return step(ctx, 'saveMealPlan', { days: params.plan.days.length }, async () => {
+    // план перезаписується цілком: тримати два конкуруючих розклади безглуздо
+    const from = params.plan.days[0]?.date ?? ctx.now
+    const to = params.plan.days[params.plan.days.length - 1]?.date ?? ctx.now
+    await prisma.mealPlan.deleteMany({
+      where: { userId: ctx.userId, date: { gte: startOfDay(from), lte: endOfDay(to) } },
+    })
+
+    let saved = 0
+    for (const day of params.plan.days) {
+      for (const meal of day.meals) {
+        await prisma.mealPlan.create({
+          data: {
+            userId: ctx.userId,
+            date: startOfDay(day.date),
+            mealType: meal.mealType,
+            recipeId: meal.recipe.id,
+            servings: meal.servings,
+            status: 'planned',
+          },
+        })
+        saved += 1
+      }
+    }
+    return {
+      result: { saved },
+      summary: `Збережено ${saved} страв у календарі харчування`,
+      output: { saved },
+    }
+  })
+}
+
+function startOfDay(date: Date): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function endOfDay(date: Date): Date {
+  const d = new Date(date)
+  d.setHours(23, 59, 59, 999)
+  return d
 }
 
 // ─────────────────────────── 4. Каталог «Сільпо» ───────────────────────────

@@ -3,8 +3,9 @@ import { sanitizeForTrace, logEvent } from '@/lib/mcp/pii'
 import { formatUah } from '@/lib/domain/scoring'
 import { effectivePrice } from '@/lib/domain/pricing'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
-import type { HouseholdContext, PantryEntry, RecipeLike, Kopiyky } from '@/lib/domain/types'
+import type { HouseholdContext, PantryEntry, RecipeLike, Kopiyky, MissingIngredient } from '@/lib/domain/types'
 import type { ScoredRecipe } from '@/lib/domain/scoring'
+import type { WeeklyPlan } from '@/lib/domain/mealplan'
 import {
   createToolContext,
   getHouseholdContext,
@@ -17,6 +18,7 @@ import {
   compareProductOptions,
   compareCookVsReadyMeal,
   createShoppingProposal,
+  generateWeeklyPlan,
   getCartSummary,
   type ProposalLine,
   type ToolContext,
@@ -379,6 +381,71 @@ export function findRecipeByQuery(query: string): RecipeLike | null {
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
   return scored[0]?.r ?? null
+}
+
+// ─────────────────────── Сценарій E: тижневий раціон ───────────────────────
+
+export interface WeeklyPlanData {
+  plan: WeeklyPlan
+  household: HouseholdContext
+  /** чернетка кошика на весь тиждень; null, якщо докуповувати нічого */
+  proposal: { proposalId: string; confirmationToken: string; total: Kopiyky } | null
+  comparisons: Awaited<ReturnType<typeof compareProductOptions>>
+}
+
+/**
+ * «Спланувати тиждень» — найдовший ланцюжок агента.
+ *
+ * Відмінність від разового підбору страви: комора вичерпується протягом
+ * тижня, тому список покупок зводиться без подвійного зарахування, а
+ * продукти з близьким терміном ставляться в перші дні.
+ */
+export async function runWeeklyPlan(
+  userId: string,
+  options: { days?: number; mealsPerDay?: number; budget?: number | null },
+): Promise<AgentResult<WeeklyPlanData>> {
+  const plan: PlanStep[] = [
+    { n: 1, tool: 'getHouseholdContext', why: 'Скільки людей, який бюджет і ліміт часу' },
+    { n: 2, tool: 'getFoodRestrictions', why: 'Виключити алергени на весь тиждень одразу' },
+    { n: 3, tool: 'getPantryInventory', why: 'Порахувати стартові залишки' },
+    { n: 4, tool: 'generateWeeklyPlan', why: 'Розкласти страви по днях, вичерпуючи комору' },
+    { n: 5, tool: 'searchSilpoProducts', why: 'Знайти зведений список покупок у «Сільпо»' },
+    { n: 6, tool: 'compareProductOptions', why: 'Дати цінові варіанти для кожної позиції' },
+    { n: 7, tool: 'createShoppingProposal', why: 'Підготувати кошик на тиждень і чекати підтвердження' },
+  ]
+
+  return runAgent(userId, `Спланувати раціон на ${options.days ?? 7} днів`, plan, async (ctx) => {
+    const household = await getHouseholdContext(ctx)
+    const restrictions = await getFoodRestrictions(ctx)
+    const pantry = await getPantryInventory(ctx)
+
+    const weekly = await generateWeeklyPlan(ctx, options, household, pantry)
+
+    const missing = weekly.shoppingList.map((i) => ({
+      name: i.name,
+      normalizedName: i.normalizedName,
+      missing: i.quantity,
+      unit: i.unit as MissingIngredient['unit'],
+      approxCost: i.approxCost,
+      optional: false,
+    }))
+
+    const searchResults = missing.length > 0 ? await searchSilpoProducts(ctx, missing) : []
+    const comparisons =
+      missing.length > 0 ? await compareProductOptions(ctx, missing, searchResults, restrictions) : []
+
+    const lines = buildProposalLines(comparisons, 'optimal')
+    const proposal =
+      lines.length > 0
+        ? await createShoppingProposal(ctx, {
+            goal: `Раціон на ${weekly.days.length} днів`,
+            lines,
+            missing: missing.map((m) => ({ name: m.name, missing: m.missing, unit: m.unit })),
+          })
+        : null
+
+    return { plan: weekly, household, proposal, comparisons }
+  })
 }
 
 // ─────────────────────────── Сценарій D: кошик ───────────────────────────

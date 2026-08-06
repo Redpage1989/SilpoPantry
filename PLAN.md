@@ -119,16 +119,28 @@ score = pantryCoverage*0.30 + expiryRescue*0.25 + restrictionMatch*0.20
 ## 8. Етапи виконання
 
 - [x] E0 Аналіз репозиторію, probe MCP discovery, PLAN.md
-- [ ] E1 Каркас: Next 15, Tailwind, UI-кіт, PWA, бренд-токени
-- [ ] E2 Prisma-схема + seed (родина Антона, 9 продуктів, шпинат «до завтра»)
-- [ ] E3 Домейн-логіка + unit-тести (normalize, scoring, missing, pricing, cook-vs-ready, списання)
-- [ ] E4 MCP-шар: OAuth DCR+PKCE, Streamable HTTP, schema guard, mock⇄live адаптер
-- [ ] E5 AI-шар: Claude vision → JSON items з confidence; генерація рецептів
-- [ ] E6 Агент: планувальник, 16 tools, safeTrace
-- [ ] E7 Екрани: Авторизація, Онбординг, Головна, Сканування+Підтвердження, Комора, Рецепти, Рецепт, Тірамісу, Кошик, Agent Trace
-- [ ] E8 Тести: Vitest + Playwright E2E (повний demo-сценарій)
-- [ ] E9 Документація: README, ARCHITECTURE(+Mermaid), SUBMISSION, DEMO_SCRIPT, .env.example
-- [ ] E10 lint → typecheck → unit → e2e → звіт «що live, що demo»
+- [x] E1 Каркас: Next 15, Tailwind, UI-кіт, PWA, бренд-токени
+- [x] E2 Prisma-схема + seed (родина Антона, 9 продуктів, шпинат «до завтра»)
+- [x] E3 Домейн-логіка + unit-тести (normalize, scoring, missing, pricing, cook-vs-ready, списання)
+- [x] E4 MCP-шар: OAuth DCR+PKCE, Streamable HTTP, schema guard, mock⇄live адаптер
+- [x] E5 AI-шар: Claude vision → JSON items з confidence; генерація рецептів
+- [x] E6 Агент: планувальник, 16 tools, safeTrace
+- [x] E7 Екрани: Авторизація, Онбординг, Головна, Сканування+Підтвердження, Комора, Рецепти, Рецепт, Тірамісу, Кошик, Agent Trace
+- [x] E8 Тести: Vitest + Playwright E2E (повний demo-сценарій)
+- [x] E9 Документація: README, ARCHITECTURE(+Mermaid), SUBMISSION, DEMO_SCRIPT, .env.example
+- [x] E10 lint → typecheck → unit → e2e → звіт «що live, що demo»
+
+Додано поза початковим планом:
+
+- [x] E11 Тижневий раціон на 1–14 днів із симуляцією споживання й одним списком покупок
+- [x] E12 Сканування штрихкоду (EAN-13/EAN-8 із перевіркою контрольної цифри)
+- [x] E13 30 рецептів і 92 кулінарні поради замість початкових 12
+- [x] E14 Імпорт комори з історії чеків «Сільпо» з кривою споживання
+- [x] E15 Деплой: Docker + Cloudflare Tunnel → https://komora.im.pl.ua
+- [x] E16 Керування акаунтом: вихід, відвʼязка «Сільпо» без втрати даних, повне видалення
+- [x] E17 Рецепти спільноти, голосування за рецепт тижня, заявка на приз переможцю
+
+Стан: 180 unit-тестів, 8 наскрізних E2E, увесь сценарій пройдено на живому MCP.
 
 ## 9. Ризики та чесні межі
 

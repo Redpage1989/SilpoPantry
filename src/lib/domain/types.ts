@@ -49,6 +49,25 @@ export const SOURCE_LABELS: Record<PantrySource, string> = {
 /** Одиниці, з якими працює домен. `pcs` — штуки. */
 export type Unit = 'г' | 'кг' | 'мл' | 'л' | 'шт' | 'ст.л' | 'ч.л' | 'пуч' | 'уп'
 
+/**
+ * Одиниці, які користувач може обрати для позиції комори.
+ * Вужчі за Unit навмисно: «ст.л» і «пуч» — кулінарні міри з рецептів,
+ * а «уп» означає «розмір невідомий» і в коморі беззмістовна.
+ */
+export const PANTRY_UNITS = ['шт', 'г', 'кг', 'мл', 'л'] as const
+export type PantryUnit = (typeof PANTRY_UNITS)[number]
+
+/** Зводить будь-яку одиницю до тієї, яку можна зберегти в коморі. */
+export function toPantryUnit(unit: Unit): PantryUnit {
+  if (unit === 'кг' || unit === 'г') return unit
+  if (unit === 'л' || unit === 'мл') return unit
+  if (unit === 'шт') return 'шт'
+  if (unit === 'ст.л' || unit === 'ч.л') return 'мл'
+  if (unit === 'пуч') return 'г'
+  // «уп» — розмір упаковки невідомий, тож рахуємо штуками
+  return 'шт'
+}
+
 export interface PantryEntry {
   id: string
   normalizedName: string

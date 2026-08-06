@@ -189,6 +189,12 @@ export class MockSilpoAdapter implements SilpoAdapter {
     return matches.map(toProductOption)
   }
 
+  async findByBarcode(code: string): Promise<ProductOption | null> {
+    const p = MOCK_CATALOG.find((x) => x.barcode === code)
+    this.record('silpo_get_products', { barcode: code }, p ? { name: p.name } : null)
+    return p ? toProductOption(p) : null
+  }
+
   async getProductDetails(productId: string): Promise<ProductOption | null> {
     const p = MOCK_CATALOG.find((x) => x.productId === productId)
     this.record('silpo_get_product_details', { productId }, p ? { name: p.name, allergens: p.allergens } : null)

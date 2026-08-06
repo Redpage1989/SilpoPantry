@@ -347,6 +347,17 @@ export class LiveSilpoAdapter implements SilpoAdapter {
    * (`required: branchId, slug, deliveryType, timeslotStart, timeslotEnd`),
    * тому slug ми зберігаємо ще на етапі пошуку.
    */
+  /**
+   * Пошук за штрихкодом. Окремого інструмента для цього MCP не має,
+   * тому шукаємо код як звичайний запит — каталог індексує EAN.
+   * Точного збігу немає — повертаємо null, а не «щось схоже»: покласти
+   * в комору чужий товар гірше, ніж не покласти нічого.
+   */
+  async findByBarcode(code: string): Promise<ProductOption | null> {
+    const results = await this.findProducts([{ ingredientKey: code, query: code, limit: 5 }])
+    return results[0]?.products[0] ?? null
+  }
+
   async getProductDetails(slugOrId: string): Promise<ProductOption | null> {
     const ctx = await this.ensureContext()
     const raw = await this.call<unknown>({

@@ -147,6 +147,8 @@ export interface SilpoAdapter {
   getPromos(): Promise<SilpoPromo[]>
   findProducts(queries: ProductSearchQuery[]): Promise<ProductSearchResult[]>
   getProductDetails(productId: string): Promise<ProductOption | null>
+  /** Пошук товару за штрихкодом; null — у каталозі не знайдено. */
+  findByBarcode(code: string): Promise<ProductOption | null>
   getReplacements(productId: string): Promise<ProductOption[]>
   getCart(): Promise<SilpoCart>
   getTimeSlots(): Promise<SilpoTimeSlot[]>

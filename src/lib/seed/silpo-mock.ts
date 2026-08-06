@@ -21,18 +21,20 @@ export interface MockProduct {
   allergens?: string[]
   /** нормалізований ключ інгредієнта, для якого цей товар підходить */
   ingredientKey: string
+  /** EAN-13, якщо товар має штрихкод (у demo — лише кілька для сценарію) */
+  barcode?: string
   /** готова страва, а не інгредієнт */
   readyMeal?: { servings: number }
 }
 
 export const MOCK_CATALOG: MockProduct[] = [
   // ── маскарпоне ─────────────────────────────────────────────
-  { productId: 'p-masc-01', companyId: 'c-1', name: 'Сир Маскарпоне 78%, 250 г', brand: 'Молокія', price: 12900, unit: 'г', packSize: 250, rating: 4.4, allergens: ['лактоза', 'молочний білок'], ingredientKey: 'маскарпоне' },
+  { productId: 'p-masc-01', companyId: 'c-1', name: 'Сир Маскарпоне 78%, 250 г', brand: 'Молокія', price: 12900, unit: 'г', packSize: 250, rating: 4.4, allergens: ['лактоза', 'молочний білок'], ingredientKey: 'маскарпоне', barcode: '4820000000017' },
   { productId: 'p-masc-02', companyId: 'c-1', name: 'Сир Mascarpone Galbani, 250 г', brand: 'Galbani', price: 18900, promoPrice: 15900, unit: 'г', packSize: 250, rating: 4.8, allergens: ['лактоза', 'молочний білок'], ingredientKey: 'маскарпоне' },
   { productId: 'p-masc-03', companyId: 'c-1', name: 'Сир Маскарпоне Bonfesto, 500 г', brand: 'Bonfesto', price: 27900, unit: 'г', packSize: 500, rating: 4.6, allergens: ['лактоза', 'молочний білок'], ingredientKey: 'маскарпоне' },
 
   // ── савоярді ───────────────────────────────────────────────
-  { productId: 'p-sav-01', companyId: 'c-1', name: 'Печиво Савоярді, 200 г', brand: 'Власна марка', price: 7900, unit: 'г', packSize: 200, rating: 4.1, allergens: ['глютен', 'яйця'], ingredientKey: 'савоярді' },
+  { productId: 'p-sav-01', companyId: 'c-1', name: 'Печиво Савоярді, 200 г', brand: 'Власна марка', price: 7900, unit: 'г', packSize: 200, rating: 4.1, allergens: ['глютен', 'яйця'], ingredientKey: 'савоярді', barcode: '4820000000024' },
   { productId: 'p-sav-02', companyId: 'c-1', name: 'Печиво Savoiardi Vicenzi, 200 г', brand: 'Vicenzi', price: 13900, promoPrice: 11900, unit: 'г', packSize: 200, rating: 4.7, allergens: ['глютен', 'яйця'], ingredientKey: 'савоярді' },
   { productId: 'p-sav-03', companyId: 'c-1', name: 'Печиво Savoiardi Bonomi, 400 г', brand: 'Bonomi', price: 24900, unit: 'г', packSize: 400, rating: 4.5, allergens: ['глютен', 'яйця'], ingredientKey: 'савоярді' },
 
@@ -54,7 +56,7 @@ export const MOCK_CATALOG: MockProduct[] = [
 
   // ── базове ─────────────────────────────────────────────────
   { productId: 'p-egg-01', companyId: 'c-1', name: 'Яйця курячі С1, 10 шт', price: 7900, unit: 'шт', packSize: 10, rating: 4.3, allergens: ['яйця'], ingredientKey: 'яйця' },
-  { productId: 'p-milk-01', companyId: 'c-1', name: 'Молоко 2,5%, 900 мл', price: 4290, unit: 'мл', packSize: 900, rating: 4.4, allergens: ['лактоза'], ingredientKey: 'молоко' },
+  { productId: 'p-milk-01', companyId: 'c-1', name: 'Молоко 2,5%, 900 мл', price: 4290, unit: 'мл', packSize: 900, rating: 4.4, allergens: ['лактоза'], ingredientKey: 'молоко', barcode: '4820000000031' },
   { productId: 'p-sugar-01', companyId: 'c-1', name: 'Цукор білий кристалічний, 1 кг', price: 4900, unit: 'г', packSize: 1000, rating: 4.5, allergens: [], ingredientKey: 'цукор' },
   { productId: 'p-flour-01', companyId: 'c-1', name: 'Борошно пшеничне в/г, 1 кг', price: 3900, unit: 'г', packSize: 1000, rating: 4.4, allergens: ['глютен'], ingredientKey: 'борошно' },
   { productId: 'p-pasta-01', companyId: 'c-1', name: 'Макарони Спагеті, 400 г', price: 4500, unit: 'г', packSize: 400, rating: 4.3, allergens: ['глютен'], ingredientKey: 'макарони' },

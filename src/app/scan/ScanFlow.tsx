@@ -4,8 +4,10 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Badge, Button, Card, InfoNote, SectionTitle } from '@/components/ui'
 import { apiUpload, apiPost, ApiError } from '@/lib/client'
+import { BarcodeScanner } from '@/components/BarcodeScanner'
 
-type Unit = 'г' | 'кг' | 'мл' | 'л' | 'шт'
+import type { PantryUnit } from '@/lib/domain/types'
+
 type Hint = 'fridge' | 'shelf' | 'cupboard' | 'package'
 
 interface RecognizedRow {
@@ -14,7 +16,7 @@ interface RecognizedRow {
   category: string
   storageLocation: string
   quantity: number
-  unit: Unit
+  unit: PantryUnit
   expiryDate: string | null
   confidence: number
   needsConfirmation: boolean
@@ -211,7 +213,7 @@ export function ScanFlow() {
               />
               <select
                 value={row.unit}
-                onChange={(e) => updateRow(setRows, index, { unit: e.target.value as Unit })}
+                onChange={(e) => updateRow(setRows, index, { unit: e.target.value as PantryUnit })}
                 aria-label="Одиниця виміру"
                 className="min-h-[46px] w-24 rounded-2xl bg-cream-100 px-3 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
               >
@@ -324,12 +326,35 @@ export function ScanFlow() {
         {busy ? 'Аналізую фото…' : 'Розпізнати продукти'}
       </Button>
 
-      <Card className="bg-cream-50">
-        <div className="text-[13px] font-medium text-graphite-700">Скоро</div>
-        <p className="mt-1 text-[12px] text-graphite-500">
-          Сканування штрихкоду — щоб додати товар одним рухом, без фото полиці.
-        </p>
-      </Card>
+      <BarcodeScanner
+        onFound={(item) => {
+          // Товар зі штрихкоду має точні назву й вагу з каталогу, тому
+          // потрапляє одразу на екран підтвердження з повною впевненістю.
+          setRows((prev) => [
+            ...prev,
+            {
+              originalName: item.originalName,
+              normalizedName: item.normalizedName,
+              category: item.category,
+              storageLocation: item.storageLocation,
+              quantity: item.quantity,
+              unit: item.unit,
+              expiryDate: null,
+              confidence: item.confidence,
+              needsConfirmation: false,
+              brand: null,
+            },
+          ])
+          setResult((prev) =>
+            prev ?? {
+              jobId: 'barcode',
+              engine: 'demo',
+              note: 'Дані взято з каталогу «Сільпо» за штрихкодом — назва й вага точні',
+              items: [],
+            },
+          )
+        }}
+      />
     </div>
   )
 }

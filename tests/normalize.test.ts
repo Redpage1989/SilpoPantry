@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeProductName, guessCategory, isSameIngredient, defaultUnit } from '@/lib/domain/normalize'
+import { normalizeProductName, guessCategory, isSameIngredient, defaultUnit, canonicalKeys } from '@/lib/domain/normalize'
 
 describe('normalizeProductName', () => {
   it('зводить бренд, відсоток і вагу з чека до чистого ключа', () => {
@@ -72,5 +72,30 @@ describe('defaultUnit', () => {
     expect(defaultUnit('Яйця курячі')).toBe('шт')
     expect(defaultUnit('Молоко')).toBe('мл')
     expect(defaultUnit('Шпинат')).toBe('г')
+  })
+})
+
+describe('канонічні ключі стабільні за побудовою', () => {
+  it('КОЖЕН канонічний ключ нормалізується сам у себе', () => {
+    // Саме цей інваріант тричі порушувався мовчки — на «масло вершкове»,
+    // «соєвий соус» і «томатна паста». Тепер identity-записи генеруються,
+    // а тест покриває весь набір, а не лише ключі з книги рецептів.
+    const broken = canonicalKeys().filter((key) => normalizeProductName(key) !== key)
+    expect(broken, `ключі, що не нормалізуються самі в себе:\n${broken.join('\n')}`).toEqual([])
+  })
+
+  it('багатослівні ключі не обрізаються до першого слова', () => {
+    const multiword = canonicalKeys().filter((k) => k.includes(' '))
+    expect(multiword.length).toBeGreaterThan(3)
+    for (const key of multiword) {
+      expect(normalizeProductName(key), `«${key}» обрізався`).toBe(key)
+    }
+  })
+
+  it('новий багатослівний ключ у CATEGORY_MAP працює без ручного запису', () => {
+    // «томатна паста» додавалась лише в CATEGORY_MAP — identity згенеровано
+    expect(canonicalKeys()).toContain('томатна паста')
+    expect(normalizeProductName('Томатна паста')).toBe('томатна паста')
+    expect(normalizeProductName('Паста томатна')).toBe('томатна паста')
   })
 })

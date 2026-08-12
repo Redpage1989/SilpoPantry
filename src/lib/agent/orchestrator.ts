@@ -290,6 +290,9 @@ export async function runDishPlan(
             goal: `Приготувати «${recipe.title}» на ${servings} порцій`,
             recipeId: recipe.id,
             lines,
+            // усі варіанти, які побачить користувач: при підтвердженні саме
+            // вони, а не дані з браузера, визначають вагу й кількість
+            options: buildAllProposalLines(comparisons),
             missing: required.map((m) => ({ name: m.name, missing: m.missing, unit: m.unit })),
           })
         : null
@@ -313,6 +316,30 @@ export async function runDishPlan(
   })
 }
 
+type Comparison = Awaited<ReturnType<typeof compareProductOptions>>[number]
+
+function toProposalLine(c: Comparison, chosen: Comparison['tiers'][number]): ProposalLine {
+  const safety = c.safety.find((s) => s.productId === chosen.product.productId)
+  return {
+    ingredientName: c.ingredient.name,
+    normalizedName: c.ingredient.normalizedName,
+    productId: chosen.product.productId,
+    companyId: chosen.product.companyId,
+    branchId: chosen.product.branchId,
+    productName: chosen.product.name,
+    tier: chosen.tier,
+    quantity: chosen.quantity,
+    weighted: chosen.product.weighted,
+    packSize: chosen.product.packSize,
+    packUnit: chosen.product.unit,
+    price: chosen.product.price,
+    promoPrice: chosen.product.promoPrice,
+    lineTotal: chosen.lineTotal,
+    promoSaving: chosen.promoSaving,
+    warnings: safety?.messages ?? [],
+  }
+}
+
 export function buildProposalLines(
   comparisons: Awaited<ReturnType<typeof compareProductOptions>>,
   tier: string,
@@ -321,24 +348,22 @@ export function buildProposalLines(
   for (const c of comparisons) {
     const chosen = c.tiers.find((t) => t.tier === tier) ?? c.tiers[0]
     if (!chosen) continue
-    const safety = c.safety.find((s) => s.productId === chosen.product.productId)
-    lines.push({
-      ingredientName: c.ingredient.name,
-      normalizedName: c.ingredient.normalizedName,
-      productId: chosen.product.productId,
-      companyId: chosen.product.companyId,
-      branchId: chosen.product.branchId,
-      productName: chosen.product.name,
-      tier: chosen.tier,
-      quantity: chosen.quantity,
-      price: chosen.product.price,
-      promoPrice: chosen.product.promoPrice,
-      lineTotal: chosen.lineTotal,
-      promoSaving: chosen.promoSaving,
-      warnings: safety?.messages ?? [],
-    })
+    lines.push(toProposalLine(c, chosen))
   }
   return lines
+}
+
+/**
+ * Усі варіанти всіх інгредієнтів — той самий набір, який бачить користувач.
+ *
+ * Зберігається разом із пропозицією, щоб при підтвердженні сервер міг
+ * відновити характеристики обраного товару за одним лише productId. Клієнт
+ * має право обрати варіант, але не має права повідомляти, скільки він важить.
+ */
+export function buildAllProposalLines(
+  comparisons: Awaited<ReturnType<typeof compareProductOptions>>,
+): ProposalLine[] {
+  return comparisons.flatMap((c) => c.tiers.map((t) => toProposalLine(c, t)))
 }
 
 function totalForTier(comparisons: Awaited<ReturnType<typeof compareProductOptions>>, tier: string): Kopiyky {

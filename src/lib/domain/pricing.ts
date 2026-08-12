@@ -11,7 +11,26 @@ export function effectivePrice(p: ProductOption): Kopiyky {
 }
 
 /**
- * Скільки упаковок треба, щоб покрити потребу (упаковку не ділять).
+ * Мінімальна покупка вагового товару — це його власний крок ваги.
+ *
+ * Єдиної межі для всього каталогу немає: у живому «Сільпо» трапляються кроки
+ * 50, 100, 200, 250, 300 і 500 г, і кожен товар відпускають кратно СВОЄМУ
+ * кроку. Тому число не зашите в код, а приходить із каталогу полем `step`.
+ *
+ * Наслідок для рецептів: 20 г пармезану замовити неможливо — мінімум дорівнює
+ * кроку цього конкретного сиру. Ми не округлюємо мовчки: рядок отримує
+ * позначку, щоб людина бачила, чому в кошику більше, ніж у рецепті.
+ */
+export function weightStepGrams(pack: ProductOption): number | null {
+  if (!pack.weighted) return null
+  if (!areUnitsCompatible(pack.unit, 'г')) return null
+  const grams = toBase(pack.packSize, pack.unit)
+  return grams > 0 ? grams : null
+}
+
+/**
+ * Скільки упаковок (для вагових — кроків ваги) треба, щоб покрити потребу.
+ * Упаковку не ділять, крок ваги — теж.
  *
  * Якщо виміри несумісні (рецепт у мл, товар у грамах) — не рахуємо
  * псевдочисло, а чесно повертаємо одну упаковку: краще недооцінити,
@@ -23,6 +42,53 @@ export function packsNeeded(missingQty: number, missingUnit: Unit, pack: Product
   const packBase = toBase(pack.packSize, pack.unit)
   if (packBase <= 0) return 1
   return Math.max(1, Math.ceil(needBase / packBase))
+}
+
+/**
+ * Чи змусив мінімальний крок узяти більше, ніж вимагає рецепт.
+ * Потрібно лише для пояснення в інтерфейсі — на розрахунок не впливає.
+ */
+export function isBelowWeightMinimum(missingQty: number, missingUnit: Unit, pack: ProductOption): boolean {
+  const step = weightStepGrams(pack)
+  if (step === null) return false
+  if (!areUnitsCompatible(missingUnit, pack.unit)) return false
+  return toBase(missingQty, missingUnit) < step
+}
+
+/** За скільки грамів «Сільпо» показує ціну вагового товару. */
+export const WEIGHTED_PRICE_BASE_GRAMS = 100
+
+/**
+ * Ціна одного кроку ваги з ціни за 100 г.
+ *
+ * «Сільпо» віддає для вагових товарів ціну за 100 г, а не за кілограм і не за
+ * крок. Перевірено на живому каталозі 12.08.2026: пекоріно романо 19,90 —
+ * це 199 грн/кг, а не 19,90 грн/кг; бекон 4,49 — це 44,90 грн/кг.
+ *
+ * Решта застосунку виходить із того, що `price` — це ціна ОДНІЄЇ упаковки
+ * (для вагових — одного кроку). Тому перерахунок робиться один раз, на межі
+ * з «Сільпо», і далі жоден розрахунок не мусить знати про цю особливість.
+ */
+export function weightedStepPrice(pricePer100g: Kopiyky, stepGrams: number): Kopiyky {
+  if (stepGrams <= 0) return pricePer100g
+  return Math.round((pricePer100g * stepGrams) / WEIGHTED_PRICE_BASE_GRAMS)
+}
+
+/**
+ * Кількість у тому вигляді, якого чекає «Сільпо» в `add_or_update_cart_products`.
+ *
+ * Схема інструмента каже прямо: «For weight goods, use multiples of
+ * addToBasketStep (e.g. 0.5 for 500g step)» — тобто для вагових товарів це
+ * КІЛОГРАМИ, а не кількість кроків. Раніше ми надсилали лічильник кроків, і
+ * два кроки сиру по 200 г перетворювались на 2 кг замість 0,4 кг.
+ *
+ * Для штучних товарів одиниця — упаковка, тож повертаємо лічильник як є.
+ */
+export function cartQuantity(pack: ProductOption, packs: number): number {
+  const step = weightStepGrams(pack)
+  if (step === null) return packs
+  // округлення до 3 знаків: 0.1 * 3 у double дає 0.30000000000000004
+  return Math.round(((step * packs) / 1000) * 1000) / 1000
 }
 
 /**

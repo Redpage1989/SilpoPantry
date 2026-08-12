@@ -7,6 +7,7 @@ import { Badge, Button, Card, InfoNote, ModeBadge, SectionTitle } from '@/compon
 import { apiPost, ApiError } from '@/lib/client'
 import { formatUah, pluralize } from '@/lib/domain/scoring'
 import { formatQuantity } from '@/lib/domain/units'
+import { isBelowWeightMinimum } from '@/lib/domain/pricing'
 import { TIER_LABELS, type ProductTier, type Unit } from '@/lib/domain/types'
 import { AgentTrace } from '@/components/AgentTrace'
 import type { TraceStep } from '@/lib/agent/tools'
@@ -24,6 +25,7 @@ interface TierOption {
     rating?: number
     packSize: number
     unit: Unit
+    weighted?: boolean
   }
   quantity: number
   lineTotal: number
@@ -93,37 +95,26 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
     mutationFn: async () => {
       const data = plan.data
       if (!data?.proposal) throw new Error('Немає пропозиції для підтвердження')
-      const lines = data.comparisons
+      /**
+       * Надсилаємо ЛИШЕ ідентифікатори обраних товарів. Ціну, вагу й крок
+       * сервер бере зі своєї пропозиції — браузер не має права повідомляти,
+       * скільки важить товар.
+       */
+      const selection = data.comparisons
         .map((c) => {
           const productId = chosen[c.ingredient.normalizedName]
           const option = productId
             ? c.tiers.find((t) => t.product.productId === productId)
             : c.tiers.find((t) => t.tier === tier) ?? c.tiers[0]
-          if (!option) return null
-          const safety = c.safety.find((s) => s.productId === option.product.productId)
-          return {
-            ingredientName: c.ingredient.name,
-            normalizedName: c.ingredient.normalizedName,
-            productId: option.product.productId,
-            companyId: option.product.companyId,
-            branchId: option.product.branchId,
-            productName: option.product.name,
-            tier: option.tier,
-            quantity: option.quantity,
-            price: option.product.price,
-            promoPrice: option.product.promoPrice,
-            lineTotal: option.lineTotal,
-            promoSaving: option.promoSaving,
-            warnings: safety?.messages ?? [],
-          }
+          return option?.product.productId ?? null
         })
-        .filter(Boolean)
+        .filter((id): id is string => id !== null)
 
       return apiPost<{ cart: { total: number; lines: unknown[]; checkoutUrl: string | null } }>('/api/cart/confirm', {
         proposalId: data.proposal.proposalId,
         confirmationToken: data.proposal.confirmationToken,
         tier,
-        lines,
+        selection,
       })
     },
     onSuccess: (res) => {
@@ -286,6 +277,14 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                                   {t.product.rating ? ` · ${t.product.rating}★` : ''}
                                 </div>
                                 <div className="mt-1 text-[11px] text-graphite-500">{t.rationale}</div>
+                                {/* Інакше людина бачить у кошику більше, ніж у рецепті, і не розуміє чому */}
+                                {isBelowWeightMinimum(c.ingredient.missing, c.ingredient.unit, t.product) && (
+                                  <div className="mt-1 text-[11px] text-graphite-500">
+                                    ⚖️ Рецепту треба {formatQuantity(c.ingredient.missing, c.ingredient.unit)}, але
+                                    цей товар відпускають кратно{' '}
+                                    {formatQuantity(t.product.packSize, t.product.unit)}
+                                  </div>
+                                )}
                               </div>
                               <div className="shrink-0 text-right">
                                 <div className="text-[15px] font-bold">{formatUah(t.lineTotal)}</div>

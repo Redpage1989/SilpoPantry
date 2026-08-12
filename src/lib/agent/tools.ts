@@ -6,7 +6,7 @@ import { analyzePantryPhotos, enrichRecognizedItem, type PhotoInput } from '@/li
 import { inferPantryFromReceipts } from '@/lib/domain/receipts'
 import { calculateMissingIngredients } from '@/lib/domain/matching'
 import { rankRecipes, formatUah } from '@/lib/domain/scoring'
-import { buildTiers, compareCookVsReady, sumBasket, estimateServingsPerPack } from '@/lib/domain/pricing'
+import { buildTiers, compareCookVsReady, sumBasket, estimateServingsPerPack, cartQuantity } from '@/lib/domain/pricing'
 import { findExpiringProducts, planDeduction, estimateDaysOfFood, expiryStatus } from '@/lib/domain/pantry'
 import { checkProductAgainstRestrictions } from '@/lib/domain/restrictions'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
@@ -686,7 +686,13 @@ export interface ProposalLine {
   branchId?: string
   productName: string
   tier: string
+  /** кількість КРОКІВ ваги або упаковок; у кошик їде через `cartQuantity` */
   quantity: number
+  /** ваговий товар: «Сільпо» чекає кілограми, а не лічильник кроків */
+  weighted?: boolean
+  /** розмір кроку/упаковки — потрібен, щоб перерахувати кількість для кошика */
+  packSize?: number
+  packUnit?: Unit
   price: number
   promoPrice?: number
   lineTotal: number
@@ -696,7 +702,14 @@ export interface ProposalLine {
 
 export async function createShoppingProposal(
   ctx: ToolContext,
-  params: { goal: string; recipeId?: string; lines: ProposalLine[]; missing: unknown },
+  params: {
+    goal: string
+    recipeId?: string
+    lines: ProposalLine[]
+    /** усі показані варіанти — джерело правди при підтвердженні */
+    options?: ProposalLine[]
+    missing: unknown
+  },
 ): Promise<{ proposalId: string; confirmationToken: string; total: number }> {
   return step(ctx, 'createShoppingProposal', { goal: params.goal, lines: params.lines.length }, async () => {
     const totals = sumBasket(params.lines)
@@ -716,6 +729,7 @@ export async function createShoppingProposal(
         goal: params.goal,
         missingIngredients: JSON.stringify(params.missing),
         selectedProducts: JSON.stringify(params.lines),
+        productOptions: JSON.stringify(params.options ?? params.lines),
         totalPrice: totals.total,
         status: 'draft',
         confirmationToken,
@@ -750,10 +764,41 @@ export async function addConfirmedItemsToCart(
     }
 
     const lines = JSON.parse(proposal.selectedProducts) as ProposalLine[]
+
+    /**
+     * Пропозиції, збережені до появи полів ваги, не містять `packUnit`.
+     * Для вагового товару це означає, що ми не знаємо його крок — і надіслали б
+     * лічильник кроків там, де «Сільпо» чекає кілограми (2 замість 0,4 кг).
+     *
+     * Здогадуватись тут не можна: помилка коштує грошей і виявиться вже після
+     * оформлення. Просимо переформувати пропозицію — це один дотик на екрані.
+     */
+    const stale = lines.filter((l) => l.packUnit === undefined)
+    if (stale.length > 0) {
+      throw new ConfirmationRequiredError(
+        'Ця пропозиція створена до оновлення застосунку. Відкрийте страву заново — кошик не змінено.',
+      )
+    }
+
     const cart = await ctx.adapter.addToCart(
       lines.map((l) => ({
         productId: l.productId,
-        quantity: l.quantity,
+        /**
+         * Для вагових товарів «Сільпо» чекає кілограми, кратні кроку ваги, а
+         * не лічильник кроків. Перерахунок саме тут, на межі із зовнішньою
+         * системою: усередині застосунку `quantity` скрізь означає кроки.
+         */
+        quantity: cartQuantity(
+          {
+            productId: l.productId,
+            name: l.productName,
+            price: l.price,
+            unit: l.packUnit!,
+            packSize: l.packSize ?? 1,
+            weighted: l.weighted,
+          },
+          l.quantity,
+        ),
         companyId: l.companyId,
         branchId: l.branchId,
       })),

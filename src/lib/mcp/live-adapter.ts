@@ -1,5 +1,6 @@
-import type { ProductOption, Unit } from '@/lib/domain/types'
+import type { Kopiyky, ProductOption, Unit } from '@/lib/domain/types'
 import { parsePackFromName } from '@/lib/domain/receipts'
+import { weightedStepPrice } from '@/lib/domain/pricing'
 import { McpHttpClient, extractToolJson, type McpToolDefinition } from './client'
 import { buildRegistry, describeSchema, resolveTool, validateArgs, type ToolRegistry } from './schema-guard'
 import {
@@ -605,8 +606,16 @@ function toProductOption(raw: unknown): ProductOption | null {
   let packSize: number
   let unit: Unit
   if (weighted) {
-    // ваговий товар: крок додавання і є мінімальною порцією, зазвичай у кг
-    packSize = step && step > 0 ? step * 1000 : 100
+    /**
+     * Ваговий товар: `step` приходить у кілограмах і є одночасно мінімальною
+     * покупкою і кроком. У живому каталозі трапляються 0.05, 0.1, 0.2, 0.25,
+     * 0.3, 0.5 — єдиної межі немає, тому число беремо з відповіді, а не з коду.
+     *
+     * Якщо `step` не прийшов (аномалія — у спостережених даних він є завжди),
+     * беремо найменший зі зустрінутих кроків. Помилитись у бік меншого
+     * безпечніше: недокупити можна виправити, зайвий кілограм сиру — ні.
+     */
+    packSize = step && step > 0 ? step * 1000 : 50
     unit = 'г'
   } else if (fromName) {
     packSize = fromName.size
@@ -616,6 +625,13 @@ function toProductOption(raw: unknown): ProductOption | null {
     unit = 'уп'
   }
 
+  /**
+   * Для вагових товарів «Сільпо» показує ціну за 100 г. Решта застосунку
+   * очікує ціну однієї упаковки (для вагових — одного кроку), тому
+   * перераховуємо тут, один раз, а не в кожному місці розрахунку.
+   */
+  const perPack = (value: Kopiyky) => (weighted ? weightedStepPrice(value, packSize) : value)
+
   return {
     productId,
     companyId: pickString(o, ['companyId', 'company']),
@@ -623,8 +639,8 @@ function toProductOption(raw: unknown): ProductOption | null {
     slug: pickString(o, ['slug']),
     name,
     brand: pickString(o, ['brand', 'trademark']),
-    price: hasPromo ? oldPrice! : price,
-    promoPrice: hasPromo ? price : undefined,
+    price: perPack(hasPromo ? oldPrice! : price),
+    promoPrice: hasPromo ? perPack(price) : undefined,
     unit,
     packSize,
     weighted,

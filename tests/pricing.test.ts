@@ -9,6 +9,9 @@ import {
   sumBasket,
   compareCookVsReady,
   estimateServingsPerPack,
+  cartQuantity,
+  isBelowWeightMinimum,
+  weightedStepPrice,
 } from '@/lib/domain/pricing'
 import { isPlausibleReadyMeal } from '@/lib/agent/tools'
 
@@ -238,5 +241,130 @@ describe('оцінка порцій у готовому товарі', () => {
     const pastry = { name: 'Тістечко Biscotti Тірамісу', price: 17400 }
     const perServing = (p: { name: string; price: number }) => p.price / estimateServingsPerPack(p.name)
     expect(perServing(cake)).toBeLessThan(perServing(pastry))
+  })
+})
+
+/**
+ * Вагові товари. Дві різні речі, які легко сплутати:
+ *
+ *   1. СКІЛЬКИ брати — мінімальна покупка дорівнює кроку ваги САМОГО товару;
+ *      єдиної межі для каталогу немає. У живому «Сільпо» 06.08.2026
+ *      зустрічались кроки 50, 100, 200, 250, 300 і 500 г.
+ *   2. В ЧОМУ надсилати — схема `add_or_update_cart_products` вимагає для
+ *      вагових товарів кілограми, кратні кроку, а не лічильник кроків.
+ *
+ * Друге коштувало реальних грошей: два кроки сиру по 200 г їхали в кошик
+ * як `quantity: 2`, і «Сільпо» розуміло це як 2 кг замість 0,4 кг.
+ */
+describe('вагові товари: крок ваги з каталогу і одиниця кількості', () => {
+  const weighed = (stepGrams: number) =>
+    product({ productId: 'w', packSize: stepGrams, unit: 'г', weighted: true })
+
+  // кроки, реально зустрінуті в каталозі «Сільпо»
+  const REAL_STEPS = [50, 100, 200, 250, 300, 500]
+
+  it('мінімум дорівнює кроку товару, а не спільному числу', () => {
+    for (const step of REAL_STEPS) {
+      // рецепту треба 20 г — беремо рівно один крок, яким би він не був
+      expect(packsNeeded(20, 'г', weighed(step))).toBe(1)
+      expect(cartQuantity(weighed(step), 1)).toBeCloseTo(step / 1000, 5)
+    }
+  })
+
+  it('20 г пармезану неможливо замовити — мінімум задає крок сиру', () => {
+    const parmesan = weighed(200)
+    expect(packsNeeded(20, 'г', parmesan)).toBe(1)
+    expect(cartQuantity(parmesan, 1)).toBe(0.2)
+    expect(isBelowWeightMinimum(20, 'г', parmesan)).toBe(true)
+  })
+
+  it('потреба більша за крок — округлюємо вгору до цілих кроків', () => {
+    expect(packsNeeded(500, 'г', weighed(100))).toBe(5)
+    expect(packsNeeded(510, 'г', weighed(100))).toBe(6)
+    expect(packsNeeded(250, 'г', weighed(50))).toBe(5)
+  })
+
+  it('у кошик іде вага в кілограмах, а не кількість кроків', () => {
+    // саме тут ховалась помилка: раніше надсилали 2 → «Сільпо» читало 2 кг
+    expect(cartQuantity(weighed(200), 2)).toBe(0.4)
+    expect(cartQuantity(weighed(250), 3)).toBe(0.75)
+    expect(cartQuantity(weighed(100), 3)).toBe(0.3) // не 0.30000000000000004
+    expect(cartQuantity(weighed(50), 1)).toBe(0.05)
+  })
+
+  it('кількість для кошика завжди кратна кроку — цього вимагає схема', () => {
+    for (const step of REAL_STEPS) {
+      for (const packs of [1, 2, 3, 7]) {
+        const kg = cartQuantity(weighed(step), packs)
+        const stepsInside = (kg * 1000) / step
+        expect(Math.abs(stepsInside - Math.round(stepsInside))).toBeLessThan(1e-6)
+      }
+    }
+  })
+
+  it('штучний товар лишається штучним: кількість упаковок як є', () => {
+    const packaged = product({ productId: 'p', packSize: 200, unit: 'г' })
+    expect(cartQuantity(packaged, 2)).toBe(2)
+    expect(packsNeeded(20, 'г', packaged)).toBe(1)
+    expect(isBelowWeightMinimum(20, 'г', packaged)).toBe(false)
+  })
+
+  it('позначка про мінімум зникає, коли потреба перевищила крок', () => {
+    expect(isBelowWeightMinimum(500, 'г', weighed(100))).toBe(false)
+    expect(isBelowWeightMinimum(99, 'г', weighed(100))).toBe(true)
+  })
+
+  it('несумісні одиниці не дають вигаданої ваги', () => {
+    // рецепт у мілілітрах, товар ваговий у грамах — рахувати нічого
+    expect(packsNeeded(30, 'мл', weighed(100))).toBe(1)
+    expect(isBelowWeightMinimum(30, 'мл', weighed(100))).toBe(false)
+  })
+})
+
+/**
+ * Ціна вагового товару.
+ *
+ * «Сільпо» показує її за 100 г — не за кілограм і не за крок ваги. Перевірено
+ * на живому каталозі 12.08.2026 на товарах різних цінових рівнів: інакше
+ * пекоріно романо коштувало б 19,90 грн/кг, а це неможливо.
+ *
+ * Решта застосунку вважає `price` ціною однієї упаковки, тому перерахунок
+ * робиться один раз при мапінгу відповіді MCP.
+ */
+describe('ціна вагового товару за 100 г', () => {
+  it('крок 100 г — ціна не змінюється', () => {
+    expect(weightedStepPrice(1990, 100)).toBe(1990)
+  })
+
+  it('крок 200 г — ціна подвоюється', () => {
+    // Beemster козячий: 19,99 за 100 г → 39,98 за крок 200 г
+    expect(weightedStepPrice(1999, 200)).toBe(3998)
+  })
+
+  it('крок 50 г — половина ціни', () => {
+    expect(weightedStepPrice(1990, 50)).toBe(995)
+  })
+
+  it('крок 500 г — пʼять разів по 100 г', () => {
+    expect(weightedStepPrice(449, 500)).toBe(2245)
+  })
+
+  it('результат лишається цілим числом копійок', () => {
+    for (const [per100, step] of [[1299, 250], [899, 300], [449, 50], [1999, 250]]) {
+      const v = weightedStepPrice(per100, step)
+      expect(Number.isInteger(v)).toBe(true)
+    }
+  })
+
+  it('крок 0 не ламає розрахунок', () => {
+    expect(weightedStepPrice(1990, 0)).toBe(1990)
+  })
+
+  it('реальні товари дають правдоподібну ціну за кілограм', () => {
+    // якби ціна була за кг, пекоріно романо коштувало б 19,90 грн/кг
+    const perKg = (per100: number, step: number) => (weightedStepPrice(per100, step) / step) * 1000 / 100
+    expect(perKg(1990, 100)).toBeCloseTo(199, 1) // пекоріно романо, грн/кг
+    expect(perKg(1999, 200)).toBeCloseTo(199.9, 1) // Beemster козячий
+    expect(perKg(449, 100)).toBeCloseTo(44.9, 1) // бекон запечений
   })
 })

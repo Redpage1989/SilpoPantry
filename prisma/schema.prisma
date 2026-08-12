@@ -180,6 +180,12 @@ model ShoppingProposal {
   missingIngredients String
   /// JSON: [{ ingredient, tier, productId, name, price, promoPrice, quantity }]
   selectedProducts  String
+  /// JSON: УСІ варіанти товарів, які застосунок показав користувачу.
+  ///
+  /// Потрібні як джерело правди при підтвердженні: клієнт надсилає лише
+  /// productId обраного варіанта, а вагу, крок і ціну сервер бере звідси.
+  /// Інакше кількість кілограмів у кошику визначали б дані з браузера.
+  productOptions    String   @default("[]")
   /// сума в копійках
   totalPrice        Int      @default(0)
   /// "draft" | "confirmed" | "added_to_cart" | "cancelled"

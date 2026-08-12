@@ -565,10 +565,21 @@ function pickNumber(o: Record<string, unknown>, keys: string[]): number | undefi
   return undefined
 }
 
-/** Ціни можуть приходити в гривнях (float) або копійках (int). */
+/**
+ * «Сільпо» віддає всі суми в ГРИВНЯХ — і цілим числом, і дробовим.
+ * Ми ж рахуємо гроші виключно в копійках, тому множимо завжди.
+ *
+ * Раніше тут стояла евристика «ціле число більше 1000 — це вже копійки».
+ * Вона мовчки ділила на 100 ціну кожного товару, дорожчого за 1000 грн:
+ * віскі за 6499 грн показувалось як 64,99 грн, сир за 1990 — як 19,90.
+ *
+ * Що ціни саме в гривнях, видно з кошика: персик має `price: 84.99`,
+ * `quantity: 0.4` і `subTotal: 34` — 84,99 × 0,4 = 34. Той самий товар у
+ * пошуку має рівно те саме `price: 84.99`, тож формат один для обох джерел.
+ */
 function toKopiyky(value: number | undefined): number | undefined {
   if (value === undefined) return undefined
-  return Number.isInteger(value) && value > 1000 ? value : Math.round(value * 100)
+  return Math.round(value * 100)
 }
 
 /**

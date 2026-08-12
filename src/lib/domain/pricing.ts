@@ -56,22 +56,23 @@ export function isBelowWeightMinimum(missingQty: number, missingUnit: Unit, pack
 }
 
 /** За скільки грамів «Сільпо» показує ціну вагового товару. */
-export const WEIGHTED_PRICE_BASE_GRAMS = 100
+export const WEIGHTED_PRICE_BASE_GRAMS = 1000
 
 /**
- * Ціна одного кроку ваги з ціни за 100 г.
+ * Ціна одного кроку ваги з ціни за кілограм.
  *
- * «Сільпо» віддає для вагових товарів ціну за 100 г, а не за кілограм і не за
- * крок. Перевірено на живому каталозі 12.08.2026: пекоріно романо 19,90 —
- * це 199 грн/кг, а не 19,90 грн/кг; бекон 4,49 — це 44,90 грн/кг.
+ * Для вагових товарів «Сільпо» дає ціну за КІЛОГРАМ, а кількість у кошику —
+ * теж у кілограмах. Це видно з арифметики самого кошика: персик має
+ * `price: 84.99`, `quantity: 0.4`, `subTotal: 34` — тобто 84,99 × 0,4 кг.
+ * Кавун: 39,99 × 5 кг = 199,95.
  *
  * Решта застосунку виходить із того, що `price` — це ціна ОДНІЄЇ упаковки
  * (для вагових — одного кроку). Тому перерахунок робиться один раз, на межі
  * з «Сільпо», і далі жоден розрахунок не мусить знати про цю особливість.
  */
-export function weightedStepPrice(pricePer100g: Kopiyky, stepGrams: number): Kopiyky {
-  if (stepGrams <= 0) return pricePer100g
-  return Math.round((pricePer100g * stepGrams) / WEIGHTED_PRICE_BASE_GRAMS)
+export function weightedStepPrice(pricePerKg: Kopiyky, stepGrams: number): Kopiyky {
+  if (stepGrams <= 0) return pricePerKg
+  return Math.round((pricePerKg * stepGrams) / WEIGHTED_PRICE_BASE_GRAMS)
 }
 
 /**
@@ -135,8 +136,25 @@ export interface TieredOption {
  */
 export function buildTiers(options: ProductOption[], missing: MissingIngredient): TieredOption[] {
   if (options.length === 0) return []
+
+  /**
+   * Ціну за базову одиницю можна порівнювати лише в межах одного виміру.
+   *
+   * Пошук «сир твердий» повертає і вагові товари (`г`), і фасовані, вага яких
+   * у каталозі не вказана (`уп`, packSize = 1). Ділення на 1 дає «ціну за
+   * упаковку», і поряд із ціною за грам вона більша в сотні разів — тому
+   * фасований товар завжди ставав «преміальним», а ваговий «бюджетним»,
+   * незалежно від справжньої вигоди.
+   *
+   * Коли виміри змішані, порівнюємо те, що взагалі можна порівняти чесно, —
+   * скільки людина заплатить, щоб закрити потребу.
+   */
+  const comparable = options.every((p) => areUnitsCompatible(p.unit, options[0].unit))
+  const rank = (p: ProductOption) =>
+    comparable ? pricePerBaseUnit(p) : effectivePrice(p) * packsNeeded(missing.missing, missing.unit, p)
+
   const withUnitPrice = options
-    .map((p) => ({ p, unitPrice: pricePerBaseUnit(p) }))
+    .map((p) => ({ p, unitPrice: rank(p) }))
     .sort((a, b) => a.unitPrice - b.unitPrice)
 
   const cheapest = withUnitPrice[0].p
@@ -161,8 +179,11 @@ export function buildTiers(options: ProductOption[], missing: MissingIngredient)
     {
       tier: 'budget',
       product: cheapest,
-      // якщо ваги упаковки каталог не дав — не вигадуємо «за 100 г»
-      rationale: cheapest.unit === 'уп' ? 'Найнижча ціна серед знайдених' : 'Найнижча ціна за 100 г/мл серед знайдених',
+      // якщо ваги упаковки каталог не дав або виміри змішані — не вигадуємо «за 100 г»
+      rationale:
+        !comparable || cheapest.unit === 'уп'
+          ? 'Найнижча підсумкова ціна серед знайдених'
+          : 'Найнижча ціна за 100 г/мл серед знайдених',
     },
     {
       tier: 'optimal',

@@ -324,47 +324,148 @@ describe('вагові товари: крок ваги з каталогу і о
 /**
  * Ціна вагового товару.
  *
- * «Сільпо» показує її за 100 г — не за кілограм і не за крок ваги. Перевірено
- * на живому каталозі 12.08.2026 на товарах різних цінових рівнів: інакше
- * пекоріно романо коштувало б 19,90 грн/кг, а це неможливо.
- *
- * Решта застосунку вважає `price` ціною однієї упаковки, тому перерахунок
- * робиться один раз при мапінгу відповіді MCP.
+ * «Сільпо» дає її за КІЛОГРАМ, а кількість у кошику — теж у кілограмах.
+ * Калібровано за арифметикою самого кошика (12.08.2026):
+ *   персик  price 84.99 · quantity 0.4 · subTotal 34      → 84,99 × 0,4 кг
+ *   кавун   price 39.99 · quantity 5   · subTotal 199.95  → 39,99 × 5 кг
+ * Той самий персик у пошуку має рівно те саме `price: 84.99`, тож формат
+ * однаковий для каталогу й кошика.
  */
-describe('ціна вагового товару за 100 г', () => {
-  it('крок 100 г — ціна не змінюється', () => {
-    expect(weightedStepPrice(1990, 100)).toBe(1990)
+describe('ціна вагового товару за кілограм', () => {
+  it('крок 1 кг — ціна не змінюється', () => {
+    expect(weightedStepPrice(8499, 1000)).toBe(8499)
   })
 
-  it('крок 200 г — ціна подвоюється', () => {
-    // Beemster козячий: 19,99 за 100 г → 39,98 за крок 200 г
-    expect(weightedStepPrice(1999, 200)).toBe(3998)
+  it('відтворює арифметику реального кошика', () => {
+    // персик: 84,99 грн/кг, крок 400 г → 34,00 грн за крок
+    expect(weightedStepPrice(8499, 400)).toBe(3400)
+    // кавун: 39,99 грн/кг, крок 5 кг → 199,95 грн за крок
+    expect(weightedStepPrice(3999, 5000)).toBe(19995)
   })
 
-  it('крок 50 г — половина ціни', () => {
-    expect(weightedStepPrice(1990, 50)).toBe(995)
+  it('крок 100 г — десята частина ціни за кілограм', () => {
+    expect(weightedStepPrice(19900, 100)).toBe(1990)
   })
 
-  it('крок 500 г — пʼять разів по 100 г', () => {
-    expect(weightedStepPrice(449, 500)).toBe(2245)
+  it('крок 200 г — пʼята частина', () => {
+    expect(weightedStepPrice(19990, 200)).toBe(3998)
   })
 
   it('результат лишається цілим числом копійок', () => {
-    for (const [per100, step] of [[1299, 250], [899, 300], [449, 50], [1999, 250]]) {
-      const v = weightedStepPrice(per100, step)
-      expect(Number.isInteger(v)).toBe(true)
+    for (const [perKg, step] of [[12999, 250], [8999, 300], [4499, 50], [19999, 250]]) {
+      expect(Number.isInteger(weightedStepPrice(perKg, step))).toBe(true)
     }
   })
 
   it('крок 0 не ламає розрахунок', () => {
-    expect(weightedStepPrice(1990, 0)).toBe(1990)
+    expect(weightedStepPrice(19900, 0)).toBe(19900)
+  })
+})
+
+/**
+ * Формат сум від «Сільпо».
+ *
+ * Усі суми приходять у ГРИВНЯХ — і цілим числом, і дробовим. Евристика
+ * «ціле число більше 1000 — це вже копійки» ділила на 100 ціну кожного
+ * товару, дорожчого за 1000 грн.
+ */
+describe('переведення цін «Сільпо» у копійки', () => {
+  // та сама функція, що в live-adapter: суми завжди в гривнях
+  const toKopiyky = (v: number) => Math.round(v * 100)
+
+  it('дробові гривні', () => {
+    expect(toKopiyky(84.99)).toBe(8499)
+    expect(toKopiyky(1.49)).toBe(149)
+    expect(toKopiyky(199.95)).toBe(19995)
   })
 
-  it('реальні товари дають правдоподібну ціну за кілограм', () => {
-    // якби ціна була за кг, пекоріно романо коштувало б 19,90 грн/кг
-    const perKg = (per100: number, step: number) => (weightedStepPrice(per100, step) / step) * 1000 / 100
-    expect(perKg(1990, 100)).toBeCloseTo(199, 1) // пекоріно романо, грн/кг
-    expect(perKg(1999, 200)).toBeCloseTo(199.9, 1) // Beemster козячий
-    expect(perKg(449, 100)).toBeCloseTo(44.9, 1) // бекон запечений
+  it('цілі гривні — теж гривні, а не копійки', () => {
+    expect(toKopiyky(274)).toBe(27400)
+    expect(toKopiyky(139)).toBe(13900)
+  })
+
+  it('дорогі товари не дешевшають у сто разів', () => {
+    // віскі за 6499 грн раніше показувалось як 64,99 грн
+    expect(toKopiyky(6499)).toBe(649900)
+    expect(toKopiyky(1990)).toBe(199000)
+    expect(toKopiyky(1001)).toBe(100100)
+  })
+
+  it('немає розриву навколо 1000', () => {
+    for (const v of [999, 1000, 1001, 1500]) {
+      expect(toKopiyky(v)).toBe(v * 100)
+    }
+  })
+})
+
+/**
+ * Рівні цін при змішаних вимірах.
+ *
+ * Пошук «сир твердий» у живому каталозі повертає і вагові товари (`г`), і
+ * фасовані без ваги в каталозі (`уп`). Ділення ціни на packSize = 1 давало
+ * «ціну за упаковку», більшу за ціну за грам у сотні разів, — тому фасований
+ * товар завжди опинявся «преміальним», а ваговий «бюджетним».
+ */
+describe('рівні цін не плутають виміри', () => {
+  const need = missing({
+    name: 'Сир твердий',
+    normalizedName: 'сир твердий',
+    needed: 200,
+    have: 0,
+    missing: 200,
+    unit: 'г',
+  })
+
+  const weighedCheese = product({
+    productId: 'w',
+    name: 'Сир ваговий',
+    packSize: 200,
+    unit: 'г',
+    weighted: true,
+    price: 3998, // 39,98 грн за 200 г
+  })
+  const packagedCheap = product({
+    productId: 'p-cheap',
+    name: 'Сир фасований дешевий',
+    packSize: 1,
+    unit: 'уп',
+    price: 8900, // 89,00 грн
+  })
+  const packagedDear = product({
+    productId: 'p-dear',
+    name: 'Сир фасований дорогий',
+    packSize: 1,
+    unit: 'уп',
+    price: 24900, // 249,00 грн
+  })
+
+  it('при змішаних вимірах рівні впорядковані за реальною ціною', () => {
+    const tiers = buildTiers([packagedDear, weighedCheese, packagedCheap], need)
+    const budget = tiers.find((t) => t.tier === 'budget')!
+    const premium = tiers.find((t) => t.tier === 'premium')!
+    // 39,98 < 89,00 < 249,00 — саме так, а не «ваговий завжди найдешевший»
+    expect(budget.product.productId).toBe('w')
+    expect(premium.product.productId).toBe('p-dear')
+    expect(budget.lineTotal).toBeLessThan(premium.lineTotal)
+  })
+
+  it('дорогий ваговий товар не стає бюджетним лише тому, що він ваговий', () => {
+    const pricyWeighed = { ...weighedCheese, productId: 'w2', price: 60000 } // 600 грн за 200 г
+    const tiers = buildTiers([pricyWeighed, packagedCheap, packagedDear], need)
+    expect(tiers.find((t) => t.tier === 'budget')!.product.productId).toBe('p-cheap')
+    expect(tiers.find((t) => t.tier === 'premium')!.product.productId).toBe('w2')
+  })
+
+  it('коли виміри однакові, порівняння лишається за базовою одиницею', () => {
+    const small = product({ productId: 's', packSize: 100, unit: 'г', price: 3000 }) // 30 грн/100 г
+    const big = product({ productId: 'b', packSize: 500, unit: 'г', price: 10000 }) // 20 грн/100 г
+    const tiers = buildTiers([small, big], need)
+    // велика упаковка вигідніша за грам, хоч і дорожча загалом
+    expect(tiers.find((t) => t.tier === 'budget')!.product.productId).toBe('b')
+  })
+
+  it('пояснення не обіцяє «за 100 г», коли виміри змішані', () => {
+    const tiers = buildTiers([weighedCheese, packagedCheap], need)
+    expect(tiers.find((t) => t.tier === 'budget')!.rationale).not.toContain('100 г')
   })
 })

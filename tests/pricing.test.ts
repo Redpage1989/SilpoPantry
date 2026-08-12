@@ -13,7 +13,7 @@ import {
   isBelowWeightMinimum,
   weightedStepPrice,
 } from '@/lib/domain/pricing'
-import { isPlausibleReadyMeal } from '@/lib/agent/tools'
+import { isPlausibleReadyMeal, isPlausibleIngredientMatch } from '@/lib/agent/tools'
 
 function product(over: Partial<ProductOption> & { productId: string }): ProductOption {
   return {
@@ -467,5 +467,40 @@ describe('рівні цін не плутають виміри', () => {
   it('пояснення не обіцяє «за 100 г», коли виміри змішані', () => {
     const tiers = buildTiers([weighedCheese, packagedCheap], need)
     expect(tiers.find((t) => t.tier === 'budget')!.rationale).not.toContain('100 г')
+  })
+})
+
+/**
+ * Релевантність товару інгредієнту.
+ *
+ * Каталог «Сільпо» шукає за входженням слова, тому на «Яйця» повертає
+ * шоколадне яйце з сюрпризом. Усі приклади нижче взяті з живого прогону
+ * сценарію «тірамісу» 12.08.2026 — це не вигадані випадки.
+ */
+describe('товар має бути самим інгредієнтом, а не солодощами з його назвою', () => {
+  it('відсіює ароматизовані продукти', () => {
+    expect(isPlausibleIngredientMatch('Десерт Bonjour зі смаком чорниці та маскарпоне', 'Маскарпоне')).toBe(false)
+    expect(isPlausibleIngredientMatch('Напій кавовий Nescafe Tiramisu зі смаком', 'Кава мелена')).toBe(false)
+  })
+
+  it('відсіює кондитерські форми', () => {
+    expect(isPlausibleIngredientMatch('Яйце шоколадне The Smurfs із сюрпризом', 'Яйця')).toBe(false)
+    expect(isPlausibleIngredientMatch('Какао-плитка Millano Spolka', 'Какао')).toBe(false)
+    expect(isPlausibleIngredientMatch('Лікер Baileys Tiramisu', 'Кава мелена')).toBe(false)
+  })
+
+  it('лишає справжні інгредієнти', () => {
+    expect(isPlausibleIngredientMatch("Сир Ghidetti «Маскарпоне» 45% з коров'ячого молока", 'Маскарпоне')).toBe(true)
+    expect(isPlausibleIngredientMatch('Яйця курячі Ситий двір С2', 'Яйця')).toBe(true)
+    expect(isPlausibleIngredientMatch('Какао-порошок «Добрик» темний', 'Какао')).toBe(true)
+    expect(isPlausibleIngredientMatch('Цукор «Премія»® білий пресований', 'Цукор')).toBe(true)
+    expect(isPlausibleIngredientMatch('Печиво «Премія»® Савоярді', 'Печиво савоярді')).toBe(true)
+  })
+
+  it('не відсіює слово, яке є в самому інгредієнті', () => {
+    // для шоколаду «шоколадний» — доречно, для яєць — ні
+    expect(isPlausibleIngredientMatch('Шоколад молочний Roshen', 'Шоколад')).toBe(true)
+    expect(isPlausibleIngredientMatch('Морозиво пломбір', 'Морозиво')).toBe(true)
+    expect(isPlausibleIngredientMatch('Сироп кленовий', 'Сироп')).toBe(true)
   })
 })

@@ -550,13 +550,32 @@ export async function searchSilpoProducts(
   missing: { name: string; normalizedName: string; missing: number; unit: Unit }[],
 ) {
   return step(ctx, 'searchSilpoProducts', { queries: missing.map((m) => m.name) }, async () => {
-    const results = await ctx.adapter.findProducts(
-      missing.map((m) => ({ ingredientKey: m.normalizedName, query: m.name, limit: 5 })),
+    const raw = await ctx.adapter.findProducts(
+      missing.map((m) => ({ ingredientKey: m.normalizedName, query: m.name, limit: 8 })),
     )
+
+    /**
+     * Каталог шукає за входженням слова, тому на «Яйця» приходить шоколадне
+     * яйце з сюрпризом, а на «Какао» — какао-плитка. Для готових страв
+     * перевірка правдоподібності була від початку, для інгредієнтів — ні,
+     * і в кошик потрапляли солодощі замість продуктів.
+     */
+    const results = raw.map((r, i) => {
+      const ingredient = missing[i]?.name ?? r.ingredientKey
+      const kept = r.products.filter((p) => isPlausibleIngredientMatch(p.name, ingredient))
+      /**
+       * Якщо не лишилось нічого — повертаємо як було. Мовчки втратити
+       * інгредієнт гірше, ніж показати сумнівний варіант: людина бачить
+       * назву товару й може обрати інший, а зниклий рядок помітити нічим.
+       */
+      return { ...r, products: kept.length > 0 ? kept : r.products }
+    })
+
     const found = results.reduce((s, r) => s + r.products.length, 0)
+    const dropped = raw.reduce((s, r) => s + r.products.length, 0) - found
     return {
       result: results,
-      summary: `Знайдено ${found} товарів для ${missing.length} позицій (${ctx.adapter.mode === 'live' ? 'MCP live' : 'demo'})`,
+      summary: `Знайдено ${found} товарів для ${missing.length} позицій (${ctx.adapter.mode === 'live' ? 'MCP live' : 'demo'})${dropped > 0 ? `, відсіяно нерелевантних: ${dropped}` : ''}`,
       output: results.map((r) => ({ ingredient: r.ingredientKey, found: r.products.length })),
     }
   })
@@ -665,6 +684,39 @@ export async function compareCookVsReadyMeal(
  * Пошук за словом «тірамісу» повертає і торт, і шоколад «смак тірамісу»,
  * і морозиво — порівнювати ціну порції з шоколадкою було б безглуздо.
  */
+/**
+ * Форми, які означають ІНШИЙ продукт, а не інгредієнт.
+ *
+ * Слово відсіює товар лише тоді, коли самого інгредієнта воно не стосується:
+ * для «шоколад» товар із «шоколадний» цілком доречний, для «яйця» — ні.
+ */
+const NOT_AN_INGREDIENT = [
+  'шоколад',
+  'цукерк',
+  'батончик',
+  'драже',
+  'морозиво',
+  'лікер',
+  'напій',
+  'плитка',
+  'сироп',
+]
+
+/**
+ * Чи схожий товар на сам інгредієнт, а не на солодощі з його назвою.
+ *
+ * Живий приклад із прогону «тірамісу»: на «Яйця» каталог повернув
+ * «Яйце шоколадне The Smurfs із сюрпризом», на «Какао» — «Какао-плитка»,
+ * на «Маскарпоне» — «Десерт Bonjour зі смаком чорниці та маскарпоне».
+ */
+export function isPlausibleIngredientMatch(productName: string, ingredientName: string): boolean {
+  const name = productName.toLowerCase()
+  const ingredient = ingredientName.toLowerCase()
+  // «зі смаком X» — ароматизований продукт, а не сам X
+  if (name.includes('смак') && !ingredient.includes('смак')) return false
+  return !NOT_AN_INGREDIENT.some((w) => name.includes(w) && !ingredient.includes(w))
+}
+
 export function isPlausibleReadyMeal(productName: string, dishTitle: string): boolean {
   const name = productName.toLowerCase()
   const dish = dishTitle.toLowerCase()

@@ -71,7 +71,7 @@ export default async function TracePage() {
         <ul className="grid grid-cols-1 gap-1.5 text-[12px]">
           {AGENT_TOOLS.map((t) => (
             <li key={t.name} className="flex gap-2">
-              <span className="font-mono text-accent-600">{t.name}</span>
+              <span className="font-mono text-accent-700">{t.name}</span>
               <span className="text-graphite-500">— {t.description}</span>
             </li>
           ))}

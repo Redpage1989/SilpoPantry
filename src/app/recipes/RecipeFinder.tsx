@@ -94,7 +94,7 @@ export function RecipeFinder() {
               max={8}
               value={servings}
               onChange={(e) => setServings(Number(e.target.value))}
-              className="w-full accent-[var(--color-accent-500)]"
+              className="h-11 w-full accent-[var(--color-accent-500)]"
               aria-label="Кількість людей"
             />
           </Row>
@@ -117,7 +117,7 @@ export function RecipeFinder() {
               step={5}
               value={maxMinutes}
               onChange={(e) => setMaxMinutes(Number(e.target.value))}
-              className="w-full accent-[var(--color-accent-500)]"
+              className="h-11 w-full accent-[var(--color-accent-500)]"
               aria-label="Максимальний час"
             />
           </Row>
@@ -130,7 +130,7 @@ export function RecipeFinder() {
               step={25}
               value={maxBudget}
               onChange={(e) => setMaxBudget(Number(e.target.value))}
-              className="w-full accent-[var(--color-accent-500)]"
+              className="h-11 w-full accent-[var(--color-accent-500)]"
               aria-label="Максимальний бюджет"
             />
           </Row>
@@ -181,10 +181,11 @@ export function RecipeFinder() {
 
       {data && (
         <>
+          {/* h2 між h1 сторінки та h3 карток: без нього зчитувач бачив стрибок рівня */}
           <div className="flex items-center justify-between px-1">
-            <span className="text-[12px] text-graphite-500">
+            <h2 className="text-[12px] font-normal text-graphite-500">
               {data.suggestions.length} варіантів · {data.durationMs} мс
-            </span>
+            </h2>
             <ModeBadge mode={data.mode} reason={data.modeReason} />
           </div>
 
@@ -259,7 +260,7 @@ export function RecipeFinder() {
 
               <button
                 onClick={() => setExpanded(expanded === s.recipe.id ? null : s.recipe.id)}
-                className="mt-3 text-[13px] font-medium text-accent-600"
+                className="mt-1 inline-flex min-h-[44px] items-center text-[13px] font-medium text-accent-700"
               >
                 {expanded === s.recipe.id ? 'Сховати розрахунок' : 'Чому саме ця страва?'}
               </button>
@@ -292,7 +293,7 @@ export function RecipeFinder() {
                 </Link>
                 <Link
                   href={`/dish?query=${encodeURIComponent(s.recipe.title)}&servings=${servings}`}
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-accent-500 text-[14px] font-semibold text-white"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-accent-700 text-[14px] font-semibold text-white"
                 >
                   Зібрати кошик
                 </Link>
@@ -318,8 +319,8 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`min-h-[36px] rounded-full px-3.5 text-[13px] font-medium transition-colors ${
-        active ? 'bg-accent-500 text-white' : 'bg-cream-200 text-graphite-700'
+      className={`min-h-[44px] rounded-full px-3.5 text-[13px] font-medium transition-colors ${
+        active ? 'bg-accent-700 text-white' : 'bg-cream-200 text-graphite-700'
       }`}
     >
       {children}

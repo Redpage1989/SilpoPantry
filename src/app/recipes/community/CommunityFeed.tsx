@@ -221,7 +221,7 @@ export function CommunityFeed() {
                 </span>
                 <Button
                   variant={r.votedByMe ? 'primary' : 'secondary'}
-                  className="min-h-[40px] px-4 text-[13px]"
+                  className="min-h-[44px] px-4 text-[13px]"
                   disabled={r.isMine || vote.isPending}
                   onClick={() => vote.mutate(r.id)}
                 >

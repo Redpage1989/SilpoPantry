@@ -17,7 +17,14 @@ export const viewport: Viewport = {
   themeColor: '#f57c1f',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  /**
+   * maximumScale навмисно НЕ задано.
+   *
+   * Раніше тут стояло `maximumScale: 1`, і це блокувало масштабування
+   * жестом — пряме порушення WCAG 1.4.4 (Resize text). Для застосунку,
+   * де половина підписів набрана 11–13 px, заборона збільшити текст
+   * коштує дорожче за випадковий зум під час прокрутки.
+   */
   viewportFit: 'cover',
 }
 

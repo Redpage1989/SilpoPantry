@@ -48,7 +48,7 @@ export default async function RecipePage({
 
   return (
     <main className="safe-top px-4 pb-6 pt-4">
-      <Link href="/recipes" className="mb-3 inline-block text-[13px] font-medium text-accent-600">
+      <Link href="/recipes" className="mb-3 inline-block text-[13px] font-medium text-accent-700">
         ← До списку страв
       </Link>
 

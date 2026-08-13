@@ -171,7 +171,7 @@ export function ScanFlow() {
                   },
                 ])
               }
-              className="text-[13px] font-medium text-accent-600"
+              className="text-[13px] font-medium text-accent-700"
             >
               + Додати пропущений
             </button>
@@ -200,7 +200,7 @@ export function ScanFlow() {
               onChange={(e) => updateRow(setRows, index, { originalName: e.target.value })}
               placeholder="Назва продукту"
               aria-label="Назва продукту"
-              className="min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] font-medium outline-none focus:ring-2 focus:ring-accent-300"
+              className="min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] font-medium outline-none focus:ring-2 focus:ring-accent-700"
             />
 
             <div className="mt-2 flex gap-2">
@@ -209,13 +209,13 @@ export function ScanFlow() {
                 value={String(row.quantity)}
                 onChange={(e) => updateRow(setRows, index, { quantity: Number(e.target.value.replace(',', '.')) || 0 })}
                 aria-label="Кількість"
-                className="min-h-[46px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+                className="min-h-[46px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
               />
               <select
                 value={row.unit}
                 onChange={(e) => updateRow(setRows, index, { unit: e.target.value as PantryUnit })}
                 aria-label="Одиниця виміру"
-                className="min-h-[46px] w-24 rounded-2xl bg-cream-100 px-3 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+                className="min-h-[46px] w-24 rounded-2xl bg-cream-100 px-3 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
               >
                 {(['шт', 'г', 'кг', 'мл', 'л'] as const).map((u) => (
                   <option key={u} value={u}>
@@ -235,7 +235,7 @@ export function ScanFlow() {
                     expiryDate: e.target.value ? new Date(e.target.value).toISOString() : null,
                   })
                 }
-                className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+                className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
               />
             </div>
           </Card>
@@ -266,7 +266,7 @@ export function ScanFlow() {
               key={h.value}
               onClick={() => setHint(h.value)}
               className={`flex min-h-[52px] items-center gap-2 rounded-2xl px-4 text-[14px] font-medium transition-colors ${
-                hint === h.value ? 'bg-accent-500 text-white' : 'bg-white text-graphite-700'
+                hint === h.value ? 'bg-accent-700 text-white' : 'bg-white text-graphite-700'
               }`}
             >
               <span aria-hidden>{h.emoji}</span>

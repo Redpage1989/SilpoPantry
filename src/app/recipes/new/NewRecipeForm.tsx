@@ -155,7 +155,7 @@ export function NewRecipeForm() {
 
       <SectionTitle
         action={
-          <button onClick={() => setIngredients((v) => [...v, { name: '', quantity: 100, unit: 'г' }])} className="text-[13px] font-medium text-accent-600">
+          <button onClick={() => setIngredients((v) => [...v, { name: '', quantity: 100, unit: 'г' }])} className="text-[13px] font-medium text-accent-700">
             + Додати
           </button>
         }
@@ -193,7 +193,7 @@ export function NewRecipeForm() {
 
       <SectionTitle
         action={
-          <button onClick={() => setSteps((v) => [...v, { text: '' }])} className="text-[13px] font-medium text-accent-600">
+          <button onClick={() => setSteps((v) => [...v, { text: '' }])} className="text-[13px] font-medium text-accent-700">
             + Крок
           </button>
         }
@@ -220,7 +220,7 @@ export function NewRecipeForm() {
 
       <SectionTitle
         action={
-          <button onClick={() => setTips((v) => [...v, { kind: 'technique', text: '' }])} className="text-[13px] font-medium text-accent-600">
+          <button onClick={() => setTips((v) => [...v, { kind: 'technique', text: '' }])} className="text-[13px] font-medium text-accent-700">
             + Порада
           </button>
         }
@@ -314,7 +314,7 @@ export function NewRecipeForm() {
 }
 
 const inputClass =
-  'min-h-[46px] rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300'
+  'min-h-[46px] rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -331,7 +331,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       type="button"
       onClick={onClick}
       className={`min-h-[36px] rounded-full px-3.5 text-[13px] font-medium transition-colors ${
-        active ? 'bg-accent-500 text-white' : 'bg-cream-200 text-graphite-700'
+        active ? 'bg-accent-700 text-white' : 'bg-cream-200 text-graphite-700'
       }`}
     >
       {children}

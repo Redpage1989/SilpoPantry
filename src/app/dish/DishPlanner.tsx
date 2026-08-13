@@ -148,14 +148,14 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Назва страви"
             placeholder="Наприклад, тірамісу"
-            className="min-h-[46px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+            className="min-h-[46px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
           />
           <input
             inputMode="numeric"
             value={String(servings)}
             onChange={(e) => setServings(Math.max(1, Math.min(12, Number(e.target.value) || 1)))}
             aria-label="Кількість порцій"
-            className="min-h-[46px] w-16 rounded-2xl bg-cream-100 px-3 text-center text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+            className="min-h-[46px] w-16 rounded-2xl bg-cream-100 px-3 text-center text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
           />
         </div>
         <Button full className="mt-2" onClick={() => plan.mutate({ query, servings })} disabled={plan.isPending}>
@@ -222,7 +222,7 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                       setChosen({})
                     }}
                     className={`rounded-2xl p-3 text-left transition-colors ${
-                      tier === t ? 'bg-accent-500 text-white' : 'bg-white text-graphite-900'
+                      tier === t ? 'bg-accent-700 text-white' : 'bg-white text-graphite-900'
                     }`}
                   >
                     <div className="text-[12px] font-semibold">{TIER_LABELS[t]}</div>
@@ -398,7 +398,7 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                     href={added.checkoutUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-accent-500 px-5 text-[15px] font-semibold text-white"
+                    className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-accent-700 px-5 text-[15px] font-semibold text-white"
                   >
                     Перейти до оформлення
                   </a>
@@ -471,7 +471,7 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
 
           <button
             onClick={() => setShowTrace((v) => !v)}
-            className="w-full py-2 text-center text-[13px] font-medium text-accent-600"
+            className="min-h-[44px] w-full text-center text-[13px] font-medium text-accent-700"
           >
             {showTrace ? 'Сховати кроки агента' : 'Показати кроки агента'}
           </button>

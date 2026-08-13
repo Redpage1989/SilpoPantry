@@ -72,7 +72,7 @@ export default async function HomePage() {
       <div className="mb-5 grid grid-cols-2 gap-3">
         <Link
           href="/scan"
-          className="flex min-h-[92px] flex-col justify-between rounded-[var(--radius-card)] bg-accent-500 p-4 text-white active:bg-accent-600"
+          className="flex min-h-[92px] flex-col justify-between rounded-[var(--radius-card)] bg-accent-700 p-4 text-white active:bg-accent-800"
         >
           <span className="text-2xl" aria-hidden>
             📸
@@ -124,7 +124,7 @@ export default async function HomePage() {
       )}
 
       {/* Що приготуємо сьогодні */}
-      <SectionTitle action={<Link href="/recipes" className="text-[13px] font-medium text-accent-600">Усі страви</Link>}>
+      <SectionTitle action={<Link href="/recipes" className="-my-2 inline-flex min-h-[44px] items-center px-1 text-[13px] font-medium text-accent-700">Усі страви</Link>}>
         Що приготуємо сьогодні?
       </SectionTitle>
       <div className="mb-5 space-y-3">
@@ -171,7 +171,7 @@ export default async function HomePage() {
       </div>
 
       {/* Продукти, які треба використати */}
-      <SectionTitle action={<Link href="/pantry" className="text-[13px] font-medium text-accent-600">Комора</Link>}>
+      <SectionTitle action={<Link href="/pantry" className="-my-2 inline-flex min-h-[44px] items-center px-1 text-[13px] font-medium text-accent-700">Комора</Link>}>
         {expiring.length > 0
           ? `${expiring.length} ${pluralize(expiring.length, 'продукт', 'продукти', 'продуктів')} потрібно використати найближчим часом`
           : 'Терміни придатності під контролем'}

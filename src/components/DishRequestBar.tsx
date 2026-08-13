@@ -63,7 +63,7 @@ export function DishRequestBar({ defaultValue = '' }: { defaultValue?: string })
           type="button"
           onClick={startVoice}
           aria-label="Сказати голосом"
-          className="flex h-10 w-10 items-center justify-center rounded-xl text-graphite-500 active:bg-cream-200"
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-graphite-500 active:bg-cream-200"
         >
           {listening ? '🎙️' : '🎤'}
         </button>
@@ -74,7 +74,7 @@ export function DishRequestBar({ defaultValue = '' }: { defaultValue?: string })
             key={s}
             type="button"
             onClick={() => setValue(s)}
-            className="rounded-full bg-cream-200 px-3 py-1.5 text-[12px] font-medium text-graphite-700 active:bg-cream-300"
+            className="min-h-[44px] rounded-full bg-cream-200 px-3.5 text-[12px] font-medium text-graphite-700 active:bg-cream-300"
           >
             {s}
           </button>

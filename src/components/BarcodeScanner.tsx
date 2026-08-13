@@ -154,7 +154,7 @@ export function BarcodeScanner({ onFound }: { onFound: (item: FoundItem) => void
               inputMode="numeric"
               placeholder="Код вручну"
               aria-label="Штрихкод вручну"
-              className="min-h-[48px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+              className="min-h-[48px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
             />
             <Button onClick={() => lookup(manualCode)} disabled={busy || manualCode.length < 6}>
               {busy ? '…' : 'Знайти'}

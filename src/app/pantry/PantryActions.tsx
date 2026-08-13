@@ -112,7 +112,7 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Наприклад, Сир твердий"
-            className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+            className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
           />
         </div>
         <div className="flex gap-2">
@@ -125,7 +125,7 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
               inputMode="decimal"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+              className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
             />
           </div>
           <div className="w-24">
@@ -136,7 +136,7 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
               id="m-unit"
               value={unit}
               onChange={(e) => setUnit(e.target.value as typeof unit)}
-              className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-3 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+              className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-3 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
             >
               {(['шт', 'г', 'кг', 'мл', 'л'] as const).map((u) => (
                 <option key={u} value={u}>
@@ -155,7 +155,7 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
             type="date"
             value={expiry}
             onChange={(e) => setExpiry(e.target.value)}
-            className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+            className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
           />
         </div>
         {error && <div className="text-[13px] text-danger-700">{error}</div>}

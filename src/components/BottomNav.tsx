@@ -32,15 +32,15 @@ export function BottomNav() {
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors',
-                  active ? 'text-accent-600' : 'text-graphite-500',
+                  active ? 'text-accent-700' : 'text-graphite-500',
                 )}
               >
                 <span
                   className={cn(
                     'flex h-8 w-12 items-center justify-center rounded-full transition-colors',
                     active && 'bg-accent-100',
-                    tab.primary && !active && 'bg-accent-500 text-white',
-                    tab.primary && active && 'bg-accent-500 text-white',
+                    tab.primary && !active && 'bg-accent-700 text-white',
+                    tab.primary && active && 'bg-accent-700 text-white',
                   )}
                 >
                   <Icon />

@@ -168,7 +168,7 @@ export default async function CartPage() {
           href={cart.checkoutUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-accent-500 text-[16px] font-semibold text-white active:bg-accent-600"
+          className="inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-accent-700 text-[16px] font-semibold text-white active:bg-accent-800"
         >
           Перейти до оформлення →
         </a>

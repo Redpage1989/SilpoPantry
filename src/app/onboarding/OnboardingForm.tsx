@@ -128,7 +128,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
         <input
           id="displayName"
           {...form.register('displayName')}
-          className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+          className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
         />
         {form.formState.errors.displayName && (
           <p className="mt-1 text-[12px] text-danger-700">{form.formState.errors.displayName.message}</p>
@@ -140,7 +140,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
           <button
             type="button"
             onClick={() => members.append({ name: '', type: 'adult', age: undefined, preferencesText: '' })}
-            className="text-[13px] font-medium text-accent-600"
+            className="text-[13px] font-medium text-accent-700"
           >
             + Додати
           </button>
@@ -156,14 +156,14 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
               {...form.register(`members.${index}.name`)}
               placeholder="Імʼя"
               aria-label="Імʼя члена родини"
-              className="min-h-[46px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+              className="min-h-[46px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
             />
             <input
               {...form.register(`members.${index}.age`)}
               inputMode="numeric"
               placeholder="Вік"
               aria-label="Вік"
-              className="min-h-[46px] w-20 rounded-2xl bg-cream-100 px-3 text-center text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+              className="min-h-[46px] w-20 rounded-2xl bg-cream-100 px-3 text-center text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
             />
           </div>
 
@@ -178,7 +178,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
                     type="button"
                     onClick={() => f.onChange(t)}
                     className={`min-h-[36px] rounded-full px-3.5 text-[13px] font-medium ${
-                      f.value === t ? 'bg-accent-500 text-white' : 'bg-cream-200 text-graphite-700'
+                      f.value === t ? 'bg-accent-700 text-white' : 'bg-cream-200 text-graphite-700'
                     }`}
                   >
                     {TYPE_LABELS[t]}
@@ -192,7 +192,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
             {...form.register(`members.${index}.preferencesText`)}
             placeholder="Улюблені продукти через кому"
             aria-label="Уподобання"
-            className="mt-2 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[14px] outline-none focus:ring-2 focus:ring-accent-300"
+            className="mt-2 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[14px] outline-none focus:ring-2 focus:ring-accent-700"
           />
 
           {members.fields.length > 1 && (
@@ -217,7 +217,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
           <button
             type="button"
             onClick={() => restrictions.append({ restrictionType: 'allergy', value: '', severity: 'critical' })}
-            className="text-[13px] font-medium text-accent-600"
+            className="text-[13px] font-medium text-accent-700"
           >
             + Додати
           </button>
@@ -251,7 +251,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
                       form.setValue(`restrictions.${index}.severity`, t === 'allergy' ? 'critical' : 'medium')
                     }}
                     className={`min-h-[34px] rounded-full px-3 text-[12px] font-medium ${
-                      f.value === t ? 'bg-accent-500 text-white' : 'bg-cream-200 text-graphite-700'
+                      f.value === t ? 'bg-accent-700 text-white' : 'bg-cream-200 text-graphite-700'
                     }`}
                   >
                     {RESTRICTION_LABELS[t]}
@@ -265,13 +265,13 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
               {...form.register(`restrictions.${index}.value`)}
               placeholder="Наприклад, арахіс або гостре"
               aria-label="Обмеження"
-              className="min-h-[46px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+              className="min-h-[46px] flex-1 rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
             />
             <input
               {...form.register(`restrictions.${index}.memberName`)}
               placeholder="Кого"
               aria-label="Кого стосується"
-              className="min-h-[46px] w-24 rounded-2xl bg-cream-100 px-3 text-[14px] outline-none focus:ring-2 focus:ring-accent-300"
+              className="min-h-[46px] w-24 rounded-2xl bg-cream-100 px-3 text-[14px] outline-none focus:ring-2 focus:ring-accent-700"
             />
           </div>
           <button
@@ -303,7 +303,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
             id="budget"
             {...form.register('weeklyBudgetUah')}
             inputMode="numeric"
-            className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+            className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
           />
         </div>
         <div className="flex gap-2">
@@ -315,7 +315,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
               id="meals"
               {...form.register('mealsPerDay')}
               inputMode="numeric"
-              className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+              className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
             />
           </div>
           <div className="flex-1">
@@ -326,7 +326,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
               id="cooktime"
               {...form.register('maxCookMinutes')}
               inputMode="numeric"
-              className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-300"
+              className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
             />
           </div>
         </div>

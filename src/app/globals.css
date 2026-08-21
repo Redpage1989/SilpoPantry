@@ -21,10 +21,24 @@
   --color-accent-300: #ffb066;
   --color-accent-500: #f57c1f;
   --color-accent-600: #e06a10;
-  /* accent-700 затемнено з #b8530a: білий текст на ньому дає 5.76 замість 4.91,
-     а сам він на кремовому — 5.40. Один токен закриває кнопки, посилання й бейджі. */
+  /*
+    Два помаранчеві з РІЗНИМИ ролями. Це правило, а не смак:
+
+      accent-500 — ЗАЛИВКА. Кнопки, активні плитки, центральний таб.
+                   Текст на ній ЗАВЖДИ graphite-900 (6.08:1), ніколи білий:
+                   білий на #f57c1f дає 2.70 і не проходить.
+      accent-700 — ЧОРНИЛО. Текст, посилання, бейджі, смуга прогресу —
+                   усе, що лежить НА кремовому чи білому (5.40:1).
+
+    Спершу я затемнив кнопки до accent-700 з білим текстом. Контраст це
+    полагодило, але застосунок став читатися як теракота, а не як «Сільпо»,
+    і яскравий помаранчевий однаково лишався на повзунках, іконці входу
+    й рамці обраної картки — тобто аудит пройшли кнопки, а не система.
+    Незалежне рев'ю вказало на це, і воно має рацію: бренд несе заливка,
+    а читабельність — чорнило.
+  */
   --color-accent-700: #a84a08;
-  /* натиснутий стан головної кнопки */
+  /* натиснутий стан чорнила на світлому */
   --color-accent-800: #8a3b08;
 
   /* темно-графітовий текст */
@@ -146,4 +160,52 @@ a[role='button'] {
 /* Миша й дотик кільця не показують — воно потрібне лише для клавіатури. */
 :focus:not(:focus-visible) {
   outline: none;
+}
+
+/*
+  Повзунки діапазону.
+
+  Нативний `input[type=range]` у Chrome малює майже чорну доріжку, якої
+  більше ніде в застосунку немає: на екрані підбору страв це виглядало не
+  як дизайн, а як недороблений блок. Стилізуємо трек під теплу палітру,
+  бігунок — брендовою заливкою.
+*/
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-cream-300);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  width: 22px;
+  border-radius: 999px;
+  background: var(--color-accent-500);
+  border: 2px solid var(--color-cream-50);
+  box-shadow: 0 1px 4px rgba(34, 31, 28, 0.25);
+  /* трек 6px, бігунок 22px — зсуваємо на різницю, щоб він сидів по центру */
+  margin-top: -8px;
+}
+
+input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-cream-300);
+}
+
+input[type='range']::-moz-range-thumb {
+  height: 22px;
+  width: 22px;
+  border: 2px solid var(--color-cream-50);
+  border-radius: 999px;
+  background: var(--color-accent-500);
 }

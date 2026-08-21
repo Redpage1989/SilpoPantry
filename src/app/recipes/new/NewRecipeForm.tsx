@@ -331,7 +331,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       type="button"
       onClick={onClick}
       className={`min-h-[36px] rounded-full px-3.5 text-[13px] font-medium transition-colors ${
-        active ? 'bg-accent-700 text-white' : 'bg-cream-200 text-graphite-700'
+        active ? 'bg-accent-500 text-graphite-900' : 'bg-cream-200 text-graphite-700'
       }`}
     >
       {children}

@@ -266,7 +266,7 @@ export function ScanFlow() {
               key={h.value}
               onClick={() => setHint(h.value)}
               className={`flex min-h-[52px] items-center gap-2 rounded-2xl px-4 text-[14px] font-medium transition-colors ${
-                hint === h.value ? 'bg-accent-700 text-white' : 'bg-white text-graphite-700'
+                hint === h.value ? 'bg-accent-500 text-graphite-900' : 'bg-white text-graphite-700'
               }`}
             >
               <span aria-hidden>{h.emoji}</span>

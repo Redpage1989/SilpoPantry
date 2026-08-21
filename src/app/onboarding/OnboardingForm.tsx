@@ -178,7 +178,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
                     type="button"
                     onClick={() => f.onChange(t)}
                     className={`min-h-[36px] rounded-full px-3.5 text-[13px] font-medium ${
-                      f.value === t ? 'bg-accent-700 text-white' : 'bg-cream-200 text-graphite-700'
+                      f.value === t ? 'bg-accent-500 text-graphite-900' : 'bg-cream-200 text-graphite-700'
                     }`}
                   >
                     {TYPE_LABELS[t]}
@@ -251,7 +251,7 @@ export function OnboardingForm({ prefill, mode }: { prefill: Prefill; mode: 'liv
                       form.setValue(`restrictions.${index}.severity`, t === 'allergy' ? 'critical' : 'medium')
                     }}
                     className={`min-h-[34px] rounded-full px-3 text-[12px] font-medium ${
-                      f.value === t ? 'bg-accent-700 text-white' : 'bg-cream-200 text-graphite-700'
+                      f.value === t ? 'bg-accent-500 text-graphite-900' : 'bg-cream-200 text-graphite-700'
                     }`}
                   >
                     {RESTRICTION_LABELS[t]}

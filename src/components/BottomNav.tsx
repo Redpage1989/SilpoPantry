@@ -39,8 +39,8 @@ export function BottomNav() {
                   className={cn(
                     'flex h-8 w-12 items-center justify-center rounded-full transition-colors',
                     active && 'bg-accent-100',
-                    tab.primary && !active && 'bg-accent-700 text-white',
-                    tab.primary && active && 'bg-accent-700 text-white',
+                    tab.primary && !active && 'bg-accent-500 text-graphite-900',
+                    tab.primary && active && 'bg-accent-500 text-graphite-900',
                   )}
                 >
                   <Icon />

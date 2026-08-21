@@ -72,7 +72,7 @@ export default async function HomePage() {
       <div className="mb-5 grid grid-cols-2 gap-3">
         <Link
           href="/scan"
-          className="flex min-h-[92px] flex-col justify-between rounded-[var(--radius-card)] bg-accent-700 p-4 text-white active:bg-accent-800"
+          className="flex min-h-[92px] flex-col justify-between rounded-[var(--radius-card)] bg-accent-500 p-4 text-graphite-900 active:bg-accent-600"
         >
           <span className="text-2xl" aria-hidden>
             📸
@@ -215,7 +215,16 @@ export default async function HomePage() {
         <div className="flex gap-3">
           <Stat
             label="Вистачить продуктів"
-            value={`≈ ${daysOfFood} ${pluralize(Math.round(daysOfFood), 'день', 'дні', 'днів')}`}
+            /**
+             * Округлення до цілого і форма слова мають узгоджуватись між собою.
+             * Було «≈ 0.5 день»: крапка замість коми, і Math.round(0.5) = 1
+             * давало однину до дробового числа.
+             */
+            value={
+              daysOfFood < 1
+                ? 'менше дня'
+                : `≈ ${Math.round(daysOfFood)} ${pluralize(Math.round(daysOfFood), 'день', 'дні', 'днів')}`
+            }
             hint={`на ${household.members.length} ос.`}
           />
           <div className="w-px bg-cream-200" />

@@ -293,7 +293,7 @@ export function RecipeFinder() {
                 </Link>
                 <Link
                   href={`/dish?query=${encodeURIComponent(s.recipe.title)}&servings=${servings}`}
-                  className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-accent-700 text-[14px] font-semibold text-white"
+                  className="inline-flex min-h-[44px] items-center justify-center rounded-2xl bg-accent-500 text-[14px] font-semibold text-graphite-900"
                 >
                   Зібрати кошик
                 </Link>
@@ -320,7 +320,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     <button
       onClick={onClick}
       className={`min-h-[44px] rounded-full px-3.5 text-[13px] font-medium transition-colors ${
-        active ? 'bg-accent-700 text-white' : 'bg-cream-200 text-graphite-700'
+        active ? 'bg-accent-500 text-graphite-900' : 'bg-cream-200 text-graphite-700'
       }`}
     >
       {children}

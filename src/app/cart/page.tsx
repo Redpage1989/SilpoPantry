@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { getUserId } from '@/lib/session'
 import { runCartOverview } from '@/lib/agent/orchestrator'
 import { Badge, Card, LinkButton, ModeBadge, SectionTitle } from '@/components/ui'
-import { formatUah } from '@/lib/domain/scoring'
+import { formatUah, pluralize } from '@/lib/domain/scoring'
 import { CartConfirm } from './CartConfirm'
 
 export const dynamic = 'force-dynamic'
@@ -31,7 +31,9 @@ export default async function CartPage() {
         <div>
           <h1 className="text-[22px] font-bold tracking-tight">Кошик</h1>
           <p className="text-[13px] text-graphite-500">
-            {cart.lines.length > 0 ? `${cart.lines.length} позицій` : 'Поки що порожній'}
+            {cart.lines.length > 0
+              ? `${cart.lines.length} ${pluralize(cart.lines.length, 'позиція', 'позиції', 'позицій')}`
+              : 'Поки що порожній'}
           </p>
         </div>
         <ModeBadge mode={run.mode} reason={run.modeReason} />
@@ -168,7 +170,7 @@ export default async function CartPage() {
           href={cart.checkoutUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-accent-700 text-[16px] font-semibold text-white active:bg-accent-800"
+          className="inline-flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-accent-500 text-[16px] font-semibold text-graphite-900 active:bg-accent-600"
         >
           Перейти до оформлення →
         </a>

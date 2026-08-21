@@ -80,7 +80,7 @@ export function Badge({
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 const buttonVariants: Record<ButtonVariant, string> = {
-  primary: 'bg-accent-700 text-white active:bg-accent-800 disabled:bg-accent-300',
+  primary: 'bg-accent-500 text-graphite-900 active:bg-accent-600 disabled:bg-accent-300',
   secondary: 'bg-cream-200 text-graphite-900 active:bg-cream-300',
   ghost: 'bg-transparent text-graphite-700 active:bg-cream-200',
   danger: 'bg-danger-50 text-danger-700 active:bg-[#ffe2df]',

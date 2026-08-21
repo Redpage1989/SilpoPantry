@@ -29,6 +29,8 @@ interface TierOption {
   }
   quantity: number
   lineTotal: number
+  /** вартість тієї частини упаковки, яку страва справді спожиє */
+  consumedValue: number
   promoSaving: number
   rationale: string
 }
@@ -129,15 +131,41 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
   }, [])
 
   const data = plan.data
-  const selectedTotal = data
-    ? data.comparisons.reduce((sum, c) => {
+
+  /**
+   * Один похідний стан для ВСІХ сум на екрані.
+   *
+   * До цього кнопка підтвердження рахувала вибір користувача, а картки
+   * рівнів і блок «готувати чи купити» показували цифри, що прийшли з
+   * сервера для рівня «Оптимальний». Після зміни одного товару на екрані
+   * одночасно жили три різні відповіді на питання «скільки я заплачу».
+   */
+  const effective = data
+    ? data.comparisons.map((c) => {
         const productId = chosen[c.ingredient.normalizedName]
-        const option = productId
-          ? c.tiers.find((t) => t.product.productId === productId)
+        return productId
+          ? c.tiers.find((t) => t.product.productId === productId) ?? c.tiers[0]
           : c.tiers.find((t) => t.tier === tier) ?? c.tiers[0]
-        return sum + (option?.lineTotal ?? 0)
-      }, 0)
-    : 0
+      })
+    : []
+
+  /** чи відхилився вибір від суцільного цінового рівня */
+  const mixed = data ? data.comparisons.some((c) => {
+    const productId = chosen[c.ingredient.normalizedName]
+    if (!productId) return false
+    const forTier = c.tiers.find((t) => t.tier === tier) ?? c.tiers[0]
+    return forTier?.product.productId !== productId
+  }) : false
+
+  const selectedTotal = effective.reduce((sum, o) => sum + (o?.lineTotal ?? 0), 0)
+  const selectedConsumed = effective.reduce((sum, o) => sum + (o?.consumedValue ?? o?.lineTotal ?? 0), 0)
+  const selectedLeftover = Math.max(0, selectedTotal - selectedConsumed)
+  const servingsCount = data?.servings ?? 1
+  const cookPerServing = servingsCount > 0 ? Math.round(selectedConsumed / servingsCount) : selectedConsumed
+  const readyTotal = data?.cookVsReady.comparison.ready?.totalCost ?? null
+  /** той самий поріг, що й на сервері: різниця до 20 грн — нічия */
+  const verdict: 'cook' | 'ready' | 'tie' =
+    readyTotal === null ? 'cook' : Math.abs(readyTotal - selectedConsumed) < 2000 ? 'tie' : readyTotal > selectedConsumed ? 'cook' : 'ready'
 
   return (
     <div className="space-y-4">
@@ -222,7 +250,7 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                       setChosen({})
                     }}
                     className={`rounded-2xl p-3 text-left transition-colors ${
-                      tier === t ? 'bg-accent-700 text-white' : 'bg-white text-graphite-900'
+                      tier === t ? 'bg-accent-500 text-graphite-900' : 'bg-white text-graphite-900'
                     }`}
                   >
                     <div className="text-[12px] font-semibold">{TIER_LABELS[t]}</div>
@@ -321,29 +349,29 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
             <div className="grid grid-cols-2 gap-3">
               <div
                 className={`rounded-2xl p-3 ${
-                  data.cookVsReady.comparison.recommendation === 'cook' ? 'bg-success-50' : 'bg-cream-100'
+                  verdict === 'cook' ? 'bg-success-50' : 'bg-cream-100'
                 }`}
               >
                 <div className="text-[12px] font-semibold text-graphite-700">👩‍🍳 Приготувати</div>
                 <div className="mt-1 text-[18px] font-bold">
-                  {formatUah(data.cookVsReady.comparison.cook.consumedCost)}
+                  {formatUah(selectedConsumed)}
                 </div>
                 <div className="text-[11px] text-graphite-500">
-                  {formatUah(data.cookVsReady.comparison.cook.costPerServing)} / порція
+                  {formatUah(cookPerServing)} / порція
                 </div>
                 <div className="mt-1 text-[11px] text-graphite-500">
                   ⏱ {data.cookVsReady.comparison.cook.minutes} хв
                 </div>
-                {data.cookVsReady.comparison.cook.leftoverValue > 0 && (
+                {selectedLeftover > 0 && (
                   <div className="mt-1 text-[11px] leading-snug text-graphite-500">
-                    заплатити {formatUah(data.cookVsReady.comparison.cook.totalCost)}, з них{' '}
-                    {formatUah(data.cookVsReady.comparison.cook.leftoverValue)} лишиться про запас
+                    заплатити {formatUah(selectedTotal)}, з них{' '}
+                    {formatUah(selectedLeftover)} лишиться про запас
                   </div>
                 )}
               </div>
               <div
                 className={`rounded-2xl p-3 ${
-                  data.cookVsReady.comparison.recommendation === 'ready' ? 'bg-success-50' : 'bg-cream-100'
+                  verdict === 'ready' ? 'bg-success-50' : 'bg-cream-100'
                 }`}
               >
                 <div className="text-[12px] font-semibold text-graphite-700">🛍️ Купити готове</div>
@@ -365,7 +393,15 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
               </div>
             </div>
             <p className="mt-3 text-[13px] leading-snug text-graphite-700">
-              {data.cookVsReady.comparison.explanation}
+              {/* Серверне пояснення описує рівень, а не поточний вибір: щойно
+                  користувач змінив товар, воно говорить про інші суми */}
+              {mixed && readyTotal !== null
+                ? verdict === 'cook'
+                  ? `З вашим вибором приготувати вдома дешевше на ${formatUah(readyTotal - selectedConsumed)} (${formatUah(cookPerServing)} проти ${formatUah(data.cookVsReady.comparison.ready!.costPerServing)} за порцію), але займе ${data.cookVsReady.comparison.cook.minutes} хв.`
+                  : verdict === 'ready'
+                    ? `З вашим вибором готове дешевше на ${formatUah(selectedConsumed - readyTotal)} і економить ${data.cookVsReady.comparison.cook.minutes} хв.`
+                    : `З вашим вибором різниця в ціні незначна (${formatUah(Math.abs(readyTotal - selectedConsumed))}). Питання лише в часі.`
+                : data.cookVsReady.comparison.explanation}
             </p>
             {data.cookVsReady.alternatives.length > 0 && (
               <div className="mt-3 border-t border-cream-200 pt-2">
@@ -387,7 +423,15 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
             <Card className="bg-success-50">
               <div className="text-[15px] font-semibold text-[#1f6b3a]">Товари додано до кошика</div>
               <p className="mt-1 text-[13px] text-graphite-700">
-                У кошику {added.lines} позицій на {formatUah(added.total)}.
+                У кошику {added.lines}{' '}
+                {pluralize(added.lines, 'позиція', 'позиції', 'позицій')} на {formatUah(added.total)}.
+                {added.total > selectedTotal && (
+                  <>
+                    {' '}
+                    Це {formatUah(selectedTotal)} за товари плюс{' '}
+                    {formatUah(added.total - selectedTotal)} доставки.
+                  </>
+                )}
               </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <Button variant="secondary" onClick={() => router.push('/cart')}>
@@ -398,7 +442,7 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                     href={added.checkoutUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-accent-700 px-5 text-[15px] font-semibold text-white"
+                    className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-accent-500 px-5 text-[15px] font-semibold text-graphite-900"
                   >
                     Перейти до оформлення
                   </a>
@@ -415,8 +459,8 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                   </div>
                   <p className="mt-1 text-[12px] text-graphite-500">
                     {data.comparisons.length}{' '}
-                    {pluralize(data.comparisons.length, 'позиція', 'позиції', 'позицій')} · рівень «
-                    {TIER_LABELS[tier]}»
+                    {pluralize(data.comparisons.length, 'позиція', 'позиції', 'позицій')} ·{' '}
+                    {mixed ? 'ваш власний вибір' : `рівень «${TIER_LABELS[tier]}»`}
                   </p>
                   <Button full className="mt-3" onClick={() => setConfirming(true)}>
                     Додати до кошика

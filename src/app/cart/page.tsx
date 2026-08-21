@@ -4,6 +4,7 @@ import { runCartOverview } from '@/lib/agent/orchestrator'
 import { Badge, Card, LinkButton, ModeBadge, SectionTitle } from '@/components/ui'
 import { formatUah, pluralize } from '@/lib/domain/scoring'
 import { CartConfirm } from './CartConfirm'
+import { CartLines } from './CartLines'
 
 export const dynamic = 'force-dynamic'
 
@@ -76,32 +77,7 @@ export default async function CartPage() {
         </Card>
       ) : (
         <>
-          <Card padded={false} className="mb-4 overflow-hidden">
-            <ul className="divide-y divide-cream-200">
-              {cart.lines.map((line) => (
-                <li key={line.productId} className="flex items-start justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
-                    <div className="text-[14px] font-medium leading-tight">{line.name}</div>
-                    <div className="mt-0.5 text-[12px] text-graphite-500">× {line.quantity}</div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    {line.promoPrice && line.promoPrice < line.price ? (
-                      <>
-                        <div className="text-[15px] font-bold text-accent-700">
-                          {formatUah(line.promoPrice * line.quantity)}
-                        </div>
-                        <div className="text-[11px] text-graphite-300 line-through">
-                          {formatUah(line.price * line.quantity)}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-[15px] font-bold">{formatUah(line.price * line.quantity)}</div>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
+          <CartLines lines={cart.lines} />
 
           <Card className="mb-4">
             <Row label="Сума" value={formatUah(cart.subtotal)} />

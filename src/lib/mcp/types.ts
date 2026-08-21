@@ -156,6 +156,12 @@ export interface SilpoAdapter {
   addToCart(items: CartWriteItem[]): Promise<SilpoCart>
   /** WRITE. */
   removeFromCart(productIds: string[]): Promise<SilpoCart>
+  /**
+   * WRITE. Задає ТОЧНУ кількість товару в кошику, а не додає до наявної.
+   * Потрібне для кнопок «−/+» у кошику: без цього змінити кількість
+   * помилково доданого товару можна було лише видаливши його й додавши знову.
+   */
+  setCartQuantity(productId: string, quantity: number): Promise<SilpoCart>
   /** Витягує й очищає накопичений трейс. */
   drainTrace(): McpTraceEntry[]
 }

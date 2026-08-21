@@ -241,6 +241,17 @@ export class MockSilpoAdapter implements SilpoAdapter {
     return cart
   }
 
+  async setCartQuantity(productId: string, quantity: number): Promise<SilpoCart> {
+    if (quantity <= 0) return this.removeFromCart([productId])
+    const lines = await this.readCart()
+    const line = lines.find((l) => l.productId === productId)
+    if (line) line.quantity = quantity
+    await this.writeCart(lines)
+    const cart = this.buildCart(lines)
+    this.record('silpo_add_or_update_cart_products', { productId, quantity }, { lines: cart.lines.length })
+    return cart
+  }
+
   async removeFromCart(productIds: string[]): Promise<SilpoCart> {
     const lines = (await this.readCart()).filter((l) => !productIds.includes(l.productId))
     await this.writeCart(lines)

@@ -490,6 +490,36 @@ export class LiveSilpoAdapter implements SilpoAdapter {
     return this.getCart()
   }
 
+  /**
+   * `addQuantity: false` означає «замінити», а не «додати».
+   * Нуль трактуємо як видалення: «Сільпо» не приймає quantity 0
+   * (у схемі стоїть exclusiveMinimum), і це правильніше, ніж лишати
+   * порожній рядок у кошику.
+   */
+  async setCartQuantity(productId: string, quantity: number): Promise<SilpoCart> {
+    if (quantity <= 0) return this.removeFromCart([productId])
+    const cartId = await this.ensureCartId()
+    const ctx = await this.ensureContext()
+    await this.call<unknown>({
+      candidates: ['silpo_add_or_update_cart_products', 'add_or_update_cart_products'],
+      keywords: ['cart', 'add'],
+      write: true,
+      buildArgs: () => ({
+        shoppingCartId: cartId,
+        products: [
+          {
+            productId,
+            companyId: ctx.companyId,
+            branchId: ctx.branchId,
+            quantity,
+            addQuantity: false,
+          },
+        ],
+      }),
+    })
+    return this.getCart()
+  }
+
   async removeFromCart(productIds: string[]): Promise<SilpoCart> {
     const cartId = await this.ensureCartId()
     await this.call<unknown>({

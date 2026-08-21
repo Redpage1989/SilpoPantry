@@ -38,15 +38,26 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
     await expect(page.getByText('DEMO MODE')).toBeVisible()
     await expect(page.getByText('Hackathon prototype')).toBeVisible()
 
-    // головні блоки з ТЗ
+    /**
+     * Головна свідомо звужена до двох блоків: що приготувати сьогодні і що
+     * псується. Показники комори переїхали на /pantry, персональні акції —
+     * у «Вигоду» на /cart. Тест перевіряє обидві частини: що на головній
+     * лишилось головне і що перенесене не загубилось.
+     */
     await expect(page.getByText('Що приготуємо сьогодні?')).toBeVisible()
     await expect(page.getByText(/потрібно використати найближчим часом/)).toBeVisible()
-    await expect(page.getByText('Вистачить продуктів')).toBeVisible()
-    await expect(page.getByText('Бюджет на тиждень')).toBeVisible()
-    await expect(page.getByText('Персональні пропозиції «Сільпо»')).toBeVisible()
 
     // шпинат із терміном «до завтра» — ключ демонстрації
     await expect(page.getByText('Шпинат свіжий', { exact: true }).first()).toBeVisible()
+
+    // довідкові блоки живі на своїх екранах
+    await page.goto('/pantry')
+    await expect(page.getByText('Вистачить продуктів')).toBeVisible()
+    await expect(page.getByText('Базових продуктів бракує')).toBeVisible()
+
+    await page.goto('/cart')
+    await expect(page.getByText('Вигода')).toBeVisible()
+    await expect(page.getByText('Балабонуси')).toBeVisible()
   })
 
   test('2. Фото холодильника → розпізнавання → підтвердження → комора', async ({ page }) => {

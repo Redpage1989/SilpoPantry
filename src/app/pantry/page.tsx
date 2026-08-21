@@ -2,9 +2,11 @@ import { redirect } from 'next/navigation'
 import { getUserId } from '@/lib/session'
 import { loadPantry } from '@/lib/agent/tools'
 import { resolveAdapterSafe } from '@/lib/mcp'
-import { Badge, Card, ModeBadge, SectionTitle } from '@/components/ui'
+import { Badge, Card, ModeBadge, SectionTitle, Stat } from '@/components/ui'
 import { STORAGE_LABELS, SOURCE_LABELS, type StorageLocation, type PantrySource } from '@/lib/domain/types'
-import { expiryStatus, daysUntil, EXPIRY_LABELS } from '@/lib/domain/pantry'
+import { expiryStatus, daysUntil, EXPIRY_LABELS, estimateDaysOfFood, STAPLES } from '@/lib/domain/pantry'
+import { prisma } from '@/lib/db'
+import { pluralize } from '@/lib/domain/scoring'
 import { formatQuantity } from '@/lib/domain/units'
 import { displayName } from '@/lib/domain/normalize'
 import { PantryActions } from './PantryActions'
@@ -17,8 +19,24 @@ export default async function PantryPage() {
   const userId = await getUserId()
   if (!userId) redirect('/login')
 
-  const [items, { adapter, reason }] = await Promise.all([loadPantry(userId), resolveAdapterSafe(userId)])
+  const [items, { adapter, reason }, user] = await Promise.all([
+    loadPantry(userId),
+    resolveAdapterSafe(userId),
+    prisma.user.findUnique({ where: { id: userId }, include: { members: true } }),
+  ])
   const now = new Date()
+
+  /**
+   * Показники й «докупити» переїхали сюди з головної.
+   *
+   * Обидва блоки — про стан комори, а не про те, що приготувати сьогодні.
+   * На головній вони були двома з восьми карток однакової ваги й тягнули
+   * увагу на себе, не будучи причиною відкрити застосунок.
+   */
+  const people = Math.max(1, user?.members.length ?? 1)
+  const daysOfFood = estimateDaysOfFood(items, people, user?.mealsPerDay ?? 3)
+  const have = new Set(items.map((i) => i.normalizedName))
+  const restock = STAPLES.filter((name) => !have.has(name))
 
   const grouped = ORDER.map((location) => ({
     location,
@@ -41,6 +59,26 @@ export default async function PantryPage() {
       </header>
 
       <PantryActions />
+
+      <Card className="mb-4 mt-4">
+        <div className="flex gap-3">
+          <Stat
+            label="Вистачить продуктів"
+            value={
+              daysOfFood < 1
+                ? 'менше дня'
+                : `≈ ${Math.round(daysOfFood)} ${pluralize(Math.round(daysOfFood), 'день', 'дні', 'днів')}`
+            }
+            hint={`на ${people} ос.`}
+          />
+          <div className="w-px bg-cream-200" />
+          <Stat
+            label="Базових продуктів бракує"
+            value={String(restock.length)}
+            hint={restock.length > 0 ? restock.slice(0, 3).map(displayName).join(', ') : 'усе на місці'}
+          />
+        </div>
+      </Card>
 
       {items.length === 0 && (
         <Card className="mt-4 text-center">

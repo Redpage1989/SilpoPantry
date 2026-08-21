@@ -23,7 +23,7 @@ export default async function CartPage() {
   } catch (err) {
     return <CartUnavailable message={err instanceof Error ? err.message : 'Невідома помилка'} />
   }
-  const { cart, loyalty, coupons, slots, pendingProposals } = run.data
+  const { cart, loyalty, coupons, slots, pendingProposals, promos } = run.data
   const availableSlots = slots.filter((s) => s.available)
 
   return (
@@ -106,6 +106,18 @@ export default async function CartPage() {
 
       <SectionTitle>Вигода</SectionTitle>
       <Card className="mb-4">
+        {/* Персональні акції переїхали сюди з головної: вигода має лежати
+            поруч із сумою, а не серед довідкових блоків на іншому екрані */}
+        {promos.length > 0 && (
+          <ul className="mb-3 space-y-2.5 border-b border-cream-200 pb-3">
+            {promos.slice(0, 4).map((p) => (
+              <li key={p.promoId} className="flex gap-2.5 text-[13px]">
+                <span aria-hidden>🏷️</span>
+                <span className="text-graphite-700">{p.title}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="flex items-center justify-between gap-2">
           <span className="text-[13px] text-graphite-700">Балабонуси</span>
           <Badge tone="accent">{loyalty.balabonuses}</Badge>

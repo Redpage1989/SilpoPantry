@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db'
 import { sanitizeForTrace, logEvent } from '@/lib/mcp/pii'
 import { formatUah } from '@/lib/domain/scoring'
 import { effectivePrice } from '@/lib/domain/pricing'
+import { STAPLES } from '@/lib/domain/pantry'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
 import type { HouseholdContext, PantryEntry, RecipeLike, Kopiyky, MissingIngredient } from '@/lib/domain/types'
 import type { ScoredRecipe } from '@/lib/domain/scoring'
@@ -165,11 +166,10 @@ export async function runDashboard(userId: string): Promise<AgentResult<Dashboar
 
 /** Що варто докупити: базові продукти, яких мало або немає. */
 function buildRestockList(pantry: PantryEntry[], suggestions: ScoredRecipe[]): { name: string; reason: string }[] {
-  const staples = ['молоко', 'яйця', 'хліб', 'олія', 'цукор', 'борошно', 'масло вершкове']
   const have = new Set(pantry.map((p) => p.normalizedName))
   const out: { name: string; reason: string }[] = []
 
-  for (const staple of staples) {
+  for (const staple of STAPLES) {
     if (!have.has(staple)) out.push({ name: staple, reason: 'Базовий продукт закінчився' })
   }
   for (const s of suggestions) {
@@ -481,6 +481,8 @@ export async function runCartOverview(userId: string) {
   ]
   return runAgent(userId, 'Показати кошик і підсумки', plan, async (ctx) => {
     const summary = await getCartSummary(ctx)
+    // персональні акції переїхали сюди з головної: вигода має лежати поруч із сумою
+    const promos = await ctx.adapter.getPromos().catch(() => [])
     const proposals = await prisma.shoppingProposal.findMany({
       where: { userId, status: 'draft' },
       orderBy: { createdAt: 'desc' },
@@ -488,6 +490,7 @@ export async function runCartOverview(userId: string) {
     })
     return {
       ...summary,
+      promos: promos.map((p) => ({ promoId: p.promoId, title: p.title })),
       pendingProposals: proposals.map((p) => ({
         id: p.id,
         goal: p.goal,

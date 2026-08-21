@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getUserId } from '@/lib/session'
 import { runDashboard } from '@/lib/agent/orchestrator'
-import { Badge, BrandSlot, Card, LinkButton, ModeBadge, Progress, SectionTitle, Stat } from '@/components/ui'
+import { Badge, BrandSlot, Card, LinkButton, ModeBadge, Progress, SectionTitle } from '@/components/ui'
 import { formatUah, pluralize } from '@/lib/domain/scoring'
 import { expiryStatus, daysUntil } from '@/lib/domain/pantry'
 import { displayName } from '@/lib/domain/normalize'
@@ -48,7 +48,7 @@ export default async function HomePage() {
   } catch (err) {
     return <DashboardUnavailable message={err instanceof Error ? err.message : 'Невідома помилка'} />
   }
-  const { household, pantry, expiring, suggestions, daysOfFood, cart, promos, loyalty, restock } = run.data
+  const { household, pantry, expiring, suggestions } = run.data
   const now = new Date()
 
   return (
@@ -210,76 +210,14 @@ export default async function HomePage() {
         )}
       </Card>
 
-      {/* Показники */}
-      <Card className="mb-5">
-        <div className="flex gap-3">
-          <Stat
-            label="Вистачить продуктів"
-            /**
-             * Округлення до цілого і форма слова мають узгоджуватись між собою.
-             * Було «≈ 0.5 день»: крапка замість коми, і Math.round(0.5) = 1
-             * давало однину до дробового числа.
-             */
-            value={
-              daysOfFood < 1
-                ? 'менше дня'
-                : `≈ ${Math.round(daysOfFood)} ${pluralize(Math.round(daysOfFood), 'день', 'дні', 'днів')}`
-            }
-            hint={`на ${household.members.length} ос.`}
-          />
-          <div className="w-px bg-cream-200" />
-          <Stat
-            label="Бюджет на тиждень"
-            value={household.weeklyBudget ? formatUah(household.weeklyBudget) : '—'}
-            hint={cart.total > 0 ? `у кошику ${formatUah(cart.total)}` : 'кошик порожній'}
-          />
-        </div>
-      </Card>
+      {/*
+        Показники, «докупити» і персональні акції переїхали на /pantry і /cart.
+        Це довідкові дані, а не привід відкрити застосунок: тримати їх на
+        головній означало вісім блоків однакової ваги, у яких головне —
+        «що приготувати сьогодні» — губилось серед решти.
+      */}
 
-      {/* Докупити */}
-      {restock.length > 0 && (
-        <>
-          <SectionTitle>Товари, які варто докупити</SectionTitle>
-          <Card className="mb-5">
-            <ul className="space-y-2">
-              {restock.map((r) => (
-                <li key={r.name} className="flex items-baseline justify-between gap-3">
-                  <span className="text-[14px] font-medium">{displayName(r.name)}</span>
-                  <span className="text-right text-[11px] text-graphite-500">{r.reason}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </>
-      )}
-
-      {/* Персональні пропозиції */}
-      <SectionTitle>Персональні пропозиції «Сільпо»</SectionTitle>
-      <Card className="mb-5">
-        {promos.length === 0 ? (
-          <p className="text-[13px] text-graphite-500">Персональних акцій зараз немає.</p>
-        ) : (
-          <ul className="space-y-2.5">
-            {promos.slice(0, 4).map((p) => (
-              <li key={p.promoId} className="flex gap-2.5 text-[13px]">
-                <span aria-hidden>🏷️</span>
-                <span className="text-graphite-700">{p.title}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {loyalty.balabonuses > 0 && (
-          <div className="mt-3 rounded-2xl bg-accent-50 p-3 text-[13px] text-accent-700">
-            Доступно балабонусів: <strong>{loyalty.balabonuses}</strong>
-            {loyalty.level ? ` · ${loyalty.level}` : ''}
-          </div>
-        )}
-      </Card>
-
-      <div className="grid grid-cols-2 gap-3">
-        <LinkButton href="/plan" variant="secondary" full>
-          Раціон на тиждень
-        </LinkButton>
+      <div className="grid grid-cols-1 gap-3">
         <LinkButton href="/trace" variant="secondary" full>
           Як працює агент
         </LinkButton>

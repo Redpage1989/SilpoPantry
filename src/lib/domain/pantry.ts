@@ -192,3 +192,12 @@ export function estimateDaysOfFood(items: PantryEntry[], peopleCount: number, me
   const perDay = Math.max(1, peopleCount * Math.max(1, mealsPerDay - 1))
   return Math.max(0, Math.round((servings / perDay) * 10) / 10)
 }
+
+/**
+ * Базові продукти, відсутність яких варто помітити.
+ *
+ * Перелік свідомо один на весь застосунок: він живив і список «докупити» на
+ * головній, і показник на екрані комори, і два окремі масиви розійшлися б
+ * при першій же правці.
+ */
+export const STAPLES = ['молоко', 'яйця', 'хліб', 'олія', 'цукор', 'борошно', 'масло вершкове'] as const

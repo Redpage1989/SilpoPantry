@@ -78,7 +78,16 @@ export function checkRecipeAgainstRestrictions(
 
     if (r.restrictionType === 'allergy' || r.restrictionType === 'intolerance') {
       const sources = ALLERGEN_SOURCES[value] ?? [value]
-      const trigger = ingredientKeys.find((k) => sources.includes(k))
+      /**
+       * Декларація автора має ту саму вагу, що й інгредієнти.
+       *
+       * Раніше вона лише показувалась у стрічці й ні на що не впливала:
+       * ми просили автора чесно вказати алергени, малювали жовту плашку —
+       * і не використовували її. Родина з алергією на арахіс могла
+       * отримати в раціон рецепт, у якому автор прямо вказав арахіс.
+       */
+      const declared = (recipe.declaredAllergens ?? []).map((a) => a.toLowerCase().trim())
+      const trigger = ingredientKeys.find((k) => sources.includes(k)) ?? declared.find((a) => a === value)
       if (trigger) {
         violations.push({
           restriction: r,

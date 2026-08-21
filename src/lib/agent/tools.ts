@@ -10,6 +10,7 @@ import { buildTiers, compareCookVsReady, sumBasket, estimateServingsPerPack, car
 import { findExpiringProducts, planDeduction, estimateDaysOfFood, expiryStatus } from '@/lib/domain/pantry'
 import { checkProductAgainstRestrictions } from '@/lib/domain/restrictions'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
+import { toRecipeLike } from '@/lib/domain/user-recipes'
 import { buildWeeklyPlan, countMeals, describePlan, type WeeklyPlan } from '@/lib/domain/mealplan'
 import { normalizeProductName, displayName } from '@/lib/domain/normalize'
 import type {
@@ -396,6 +397,25 @@ export const RecipeOptionsInput = z.object({
   limit: z.number().int().min(1).max(8).optional(),
 })
 
+/**
+ * Перевірені рецепти спільноти для підбору страв.
+ *
+ * Заявлені автором алергени їдуть разом із рецептом: у користувацькому
+ * рецепті алерген може ховатись за назвою інгредієнта, і декларація —
+ * єдине джерело, яке про це знає.
+ */
+async function loadCommunityRecipes(): Promise<RecipeLike[]> {
+  const rows = await prisma.userRecipe.findMany({
+    where: { status: 'published', compositionVerified: true },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  })
+  return rows.map((row) => ({
+    ...toRecipeLike(row),
+    declaredAllergens: safeJsonArray(row.declaredAllergens),
+  }))
+}
+
 export async function generateRecipeOptions(
   ctx: ToolContext,
   input: z.infer<typeof RecipeOptionsInput>,
@@ -403,7 +423,19 @@ export async function generateRecipeOptions(
   pantry: PantryEntry[],
 ) {
   return step(ctx, 'generateRecipeOptions', input, async () => {
-    let pool: RecipeLike[] = SEED_RECIPES
+    /**
+     * Пул = наші рецепти + перевірені рецепти спільноти.
+     *
+     * До цього `toRecipeLike` був мертвим кодом: користувацькі рецепти жили
+     * лише у стрічці, а документація стверджувала, що НЕперевірені з підбору
+     * виключено — з чого читалось, що перевірені в ньому беруть участь. Не
+     * брали: пул складався виключно з SEED_RECIPES.
+     *
+     * Беремо тільки `compositionVerified`: у решти нормалізатор не впізнав
+     * частину інгредієнтів, тож зіставити склад із коморою й алергіями
+     * неможливо, і мовчазне «ок» коштувало б чужого здоровʼя.
+     */
+    let pool: RecipeLike[] = [...SEED_RECIPES, ...(await loadCommunityRecipes())]
     if (input.mealType) pool = pool.filter((r) => r.mealType === input.mealType)
     if (input.difficulty) pool = pool.filter((r) => r.difficulty === input.difficulty)
     if (input.cuisine) pool = pool.filter((r) => r.cuisine.toLowerCase().includes(input.cuisine!.toLowerCase()))

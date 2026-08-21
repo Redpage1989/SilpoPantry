@@ -1,8 +1,10 @@
 {
   "name": "silpo-family-pantry",
   "version": "0.1.0",
-  "private": true,
   "description": "Сільпо: Сімейна комора — AI-агент домашніх запасів, меню та кошика (hackathon prototype)",
+  "author": "redpage1989 <redpage1989@gmail.com>",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
   "scripts": {
     "dev": "next dev -p 3210",
     "build": "next build",

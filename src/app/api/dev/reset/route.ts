@@ -14,11 +14,26 @@ import { getUserId } from '@/lib/session'
  * У production маршрут вимкнено назавжди — відповідає 404.
  */
 export async function POST() {
-  if (process.env.NODE_ENV === 'production') {
+  /**
+   * У продакшні маршрут вимкнено. Виняток — прогін E2E на прод-збірці:
+   * `next start` виставляє NODE_ENV=production, і без цього тести не можуть
+   * привести демо-користувача до відомого стану.
+   *
+   * Виняток навмисно подвійний. Мало ввімкнути змінну — скидати можна ЛИШЕ
+   * демо-користувача. Навіть якщо змінна колись потрапить на сервер через
+   * недогляд, дані живої людини лишаться недоторканими: seedDemoUser пише
+   * в того користувача, який зайшов, і без цієї межі помилка в конфізі
+   * коштувала б комусь його комори.
+   */
+  const testReset = process.env.E2E_TEST_RESET === 'true'
+  if (process.env.NODE_ENV === 'production' && !testReset) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   try {
     const userId = (await getUserId()) ?? 'demo-user'
+    if (testReset && userId !== 'demo-user') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
 
     /**
      * Демо-користувач має лишатись демонстраційним ЗАВЖДИ.

@@ -4,7 +4,7 @@ import { loadPantry } from '@/lib/agent/tools'
 import { resolveAdapterSafe } from '@/lib/mcp'
 import { Badge, Card, ModeBadge, SectionTitle, Stat } from '@/components/ui'
 import { STORAGE_LABELS, SOURCE_LABELS, type StorageLocation, type PantrySource } from '@/lib/domain/types'
-import { expiryStatus, daysUntil, EXPIRY_LABELS, estimateDaysOfFood, STAPLES } from '@/lib/domain/pantry'
+import { expiryStatus, daysUntil, EXPIRY_LABELS, estimateDaysOfFood, STAPLES, confidenceLabel } from '@/lib/domain/pantry'
 import { prisma } from '@/lib/db'
 import { pluralize } from '@/lib/domain/scoring'
 import { formatQuantity } from '@/lib/domain/units'
@@ -113,7 +113,7 @@ export default async function PantryPage() {
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           <Badge tone="neutral">{SOURCE_LABELS[item.source as PantrySource]}</Badge>
                           <Badge tone={item.confidence >= 0.8 ? 'success' : item.confidence >= 0.5 ? 'warn' : 'danger'}>
-                            впевненість {Math.round(item.confidence * 100)}%
+                            {confidenceLabel(item.confidence)}
                           </Badge>
                           {item.needsConfirmation && <Badge tone="info">потребує підтвердження</Badge>}
                         </div>

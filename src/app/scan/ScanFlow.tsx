@@ -7,6 +7,7 @@ import { apiUpload, apiPost, ApiError } from '@/lib/client'
 import { BarcodeScanner } from '@/components/BarcodeScanner'
 
 import type { PantryUnit } from '@/lib/domain/types'
+import { confidenceLabel } from '@/lib/domain/pantry'
 
 type Hint = 'fridge' | 'shelf' | 'cupboard' | 'package'
 
@@ -184,7 +185,7 @@ export function ScanFlow() {
           <Card key={index}>
             <div className="mb-2 flex items-center justify-between gap-2">
               <Badge tone={row.confidence >= 0.85 ? 'success' : row.confidence >= 0.6 ? 'warn' : 'danger'}>
-                впевненість {Math.round(row.confidence * 100)}%
+                {confidenceLabel(row.confidence)}
               </Badge>
               <button
                 onClick={() => setRows((r) => r.filter((_, i) => i !== index))}

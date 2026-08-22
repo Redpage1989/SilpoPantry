@@ -6,6 +6,7 @@ import {
   pickWeeklyWinner,
   MIN_VOTES_FOR_WINNER,
   UserRecipeInputSchema,
+  weekLabel,
 } from '@/lib/domain/user-recipes'
 import { checkRecipeAgainstRestrictions } from '@/lib/domain/restrictions'
 import type { RecipeLike, Restriction } from '@/lib/domain/types'
@@ -196,5 +197,27 @@ describe('валідація форми рецепта', () => {
     expect(
       UserRecipeInputSchema.safeParse({ ...valid, declaredAllergens: ['щось своє'] }).success,
     ).toBe(false)
+  })
+})
+
+/**
+ * Підпис тижня для людини.
+ *
+ * «2026-W34» — ключ для бази. Щоб зрозуміти, який це тиждень, треба знати
+ * ISO 8601; у стрічці рецептів це вимога не за адресою.
+ */
+describe('людський підпис тижня', () => {
+  it('поточний тиждень називає словами, а не кодом', () => {
+    const now = new Date(2026, 7, 12)
+    expect(weekLabel(isoWeek(now), now)).toBe('цього тижня')
+  })
+
+  it('минулий тиждень називає датами', () => {
+    const now = new Date(2026, 7, 12)
+    expect(weekLabel('2026-W32', now)).toBe('3.08–9.08')
+  })
+
+  it('пошкоджений ключ повертає як є, а не вигадує дати', () => {
+    expect(weekLabel('казна-що', new Date(2026, 7, 12))).toBe('казна-що')
   })
 })

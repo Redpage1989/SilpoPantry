@@ -129,7 +129,12 @@ export default async function CartPage() {
                 <span aria-hidden>🎟️</span>
                 <div>
                   <div className="font-medium text-graphite-900">{c.title}</div>
-                  {c.validUntil && <div className="text-[11px] text-graphite-500">до {c.validUntil}</div>}
+                  {c.validUntil && (
+                    <div className="text-[11px] text-graphite-500">
+                      {/* «до 2026-09-20» — формат бази, а не спосіб, у який люди говорять про дати */}
+                      діє до {new Date(c.validUntil).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' })}
+                    </div>
+                  )}
                 </div>
               </li>
             ))}

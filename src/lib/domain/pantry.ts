@@ -201,3 +201,16 @@ export function estimateDaysOfFood(items: PantryEntry[], peopleCount: number, me
  * при першій же правці.
  */
 export const STAPLES = ['молоко', 'яйця', 'хліб', 'олія', 'цукор', 'борошно', 'масло вершкове'] as const
+
+/**
+ * Рівень упевненості словами.
+ *
+ * «впевненість 65%» — це наша внутрішня метрика, а не поняття, яким людина
+ * оперує біля холодильника. Число нічого не підказує: 65% — це багато чи
+ * мало, і що з цим робити? Формулювання називає дію, а не шкалу.
+ */
+export function confidenceLabel(confidence: number): string {
+  if (confidence >= 0.85) return 'точно'
+  if (confidence >= 0.6) return 'приблизно'
+  return 'варто перевірити'
+}

@@ -228,3 +228,25 @@ export function pickWeeklyWinner(
     enoughVotes: top.votes >= MIN_VOTES_FOR_WINNER,
   }
 }
+
+/**
+ * Тиждень людською мовою.
+ *
+ * «2026-W34» — ключ для бази, а не підпис для людини: щоб зрозуміти, який це
+ * тиждень, треба знати стандарт ISO 8601. Для стрічки достатньо сказати,
+ * поточний він чи ні, а для минулих — назвати дати.
+ */
+export function weekLabel(week: string, now: Date): string {
+  if (week === isoWeek(now)) return 'цього тижня'
+  const m = week.match(/^(\d{4})-W(\d{2})$/)
+  if (!m) return week
+  const [, year, num] = m
+  // четвер визначає тиждень за ISO 8601; від нього рахуємо понеділок і неділю
+  const jan4 = new Date(Date.UTC(Number(year), 0, 4))
+  const monday = new Date(jan4)
+  monday.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() || 7) - 1) + (Number(num) - 1) * 7)
+  const sunday = new Date(monday)
+  sunday.setUTCDate(monday.getUTCDate() + 6)
+  const fmt = (d: Date) => `${d.getUTCDate()}.${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  return `${fmt(monday)}–${fmt(sunday)}`
+}

@@ -744,9 +744,29 @@ const NOT_AN_INGREDIENT = [
 export function isPlausibleIngredientMatch(productName: string, ingredientName: string): boolean {
   const name = productName.toLowerCase()
   const ingredient = ingredientName.toLowerCase()
+
   // «зі смаком X» — ароматизований продукт, а не сам X
   if (name.includes('смак') && !ingredient.includes('смак')) return false
-  return !NOT_AN_INGREDIENT.some((w) => name.includes(w) && !ingredient.includes(w))
+  if (NOT_AN_INGREDIENT.some((w) => name.includes(w) && !ingredient.includes(w))) return false
+
+  /**
+   * Чорного списку замало: він прибирає НЕ ТІ форми, але ніде не перевіряє,
+   * що товар узагалі є цим інгредієнтом. На живому каталозі це дало
+   * «Молоко пастеризоване» на запит «Яйця» — і молоко стало бюджетним
+   * рівнем, бо було найдешевшим. Пошук «Сільпо» знаходить за схожістю, тож
+   * «Маскарпоне» приводило «Тістечко Макарон».
+   *
+   * Тому позитивна перевірка з двох умов, і обидві потрібні:
+   *   · нормалізовані ключі збігаються — ловить «Яйця курячі Свіжак»;
+   *   · або назва містить ключ інгредієнта — ловить «Сир Ghidetti
+   *     «Маскарпоне» 45%», де ключ товару «сир», а не «маскарпоне».
+   *
+   * Самого нормалізатора мало: він звів би правильне савоярді до «печиво»
+   * і відкинув його разом зі сміттям.
+   */
+  const key = normalizeProductName(ingredientName)
+  if (key.length === 0) return true
+  return normalizeProductName(productName) === key || name.includes(key)
 }
 
 export function isPlausibleReadyMeal(productName: string, dishTitle: string): boolean {

@@ -7,7 +7,7 @@ import { Badge, Button, Card, InfoNote, ModeBadge, SectionTitle } from '@/compon
 import { apiPost, ApiError } from '@/lib/client'
 import { formatUah, pluralize } from '@/lib/domain/scoring'
 import { formatQuantity } from '@/lib/domain/units'
-import { isBelowWeightMinimum } from '@/lib/domain/pricing'
+import { isBelowWeightMinimum, pricePerHundred } from '@/lib/domain/pricing'
 import { TIER_LABELS, type ProductTier, type Unit } from '@/lib/domain/types'
 import { AgentTrace } from '@/components/AgentTrace'
 import type { TraceStep } from '@/lib/agent/tools'
@@ -304,6 +304,17 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                                     : `${t.quantity} × ${t.product.packSize} ${t.product.unit}`}
                                   {t.product.rating ? ` · ${t.product.rating}★` : ''}
                                 </div>
+                                {/*
+                                  Питома ціна — те, за чим рівні впорядковані насправді.
+                                  Без неї «Преміальний 159 грн» поруч з «Оптимальний 279 грн»
+                                  читається як помилка розрахунку, хоча різні лише фасовки.
+                                */}
+                                {pricePerHundred(t.product) !== null && (
+                                  <div className="text-[11px] font-medium text-graphite-700">
+                                    {formatUah(pricePerHundred(t.product)!)} за 100{' '}
+                                    {t.product.unit === 'мл' || t.product.unit === 'л' ? 'мл' : 'г'}
+                                  </div>
+                                )}
                                 <div className="mt-1 text-[11px] text-graphite-500">{t.rationale}</div>
                                 {/* Інакше людина бачить у кошику більше, ніж у рецепті, і не розуміє чому */}
                                 {isBelowWeightMinimum(c.ingredient.missing, c.ingredient.unit, t.product) && (

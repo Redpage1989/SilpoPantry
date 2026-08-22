@@ -190,7 +190,18 @@ export function buildTiers(options: ProductOption[], missing: MissingIngredient)
       product: best,
       rationale: best.rating ? `Найкраще співвідношення ціни та оцінки (${best.rating}★)` : 'Збалансований варіант за ціною',
     },
-    { tier: 'premium', product: priciest, rationale: 'Преміальний варіант — вища якість або бренд' },
+    {
+      tier: 'premium',
+      product: priciest,
+      /**
+       * Раніше тут стояло «вища якість або бренд». Алгоритм якість ніде не
+       * перевіряє: преміальним стає найдорожчий ЗА 100 г. Стверджувати те,
+       * чого не вимірюєш, — найдешевший спосіб втратити довіру до решти цифр.
+       */
+      rationale: !comparable
+        ? 'Найвища підсумкова ціна серед знайдених'
+        : 'Найвища ціна за 100 г/мл — зазвичай це бренд або менша фасовка',
+    },
   ]
 
   // якщо варіантів менше трьох — не вигадуємо дублікати
@@ -377,4 +388,21 @@ export function compareCookVsReady(params: {
         : `Різниця в ціні незначна (${formatUah(Math.abs(diff))}). Питання лише в часі: вдома — ${cookMinutes} хв, готове — одразу.${leftoverNote}`
 
   return { cook, ready, recommendation, explanation, savingIfCook: Math.max(0, diff), minutesSavedIfReady: minutesSaved }
+}
+
+/**
+ * Ціна за 100 г/мл — те, за чим насправді впорядковані цінові рівні.
+ *
+ * Без неї «Преміальний 159 грн» поруч із «Оптимальний 279 грн» читається як
+ * помилка розрахунку: підсумки різні, бо різні фасовки (250 г проти 500 г).
+ * Показавши питому ціну, ми робимо порядок самоочевидним замість того, щоб
+ * просити вірити ярликам.
+ *
+ * Повертає null, коли ваги упаковки каталог не дав, — вигадувати її не можна.
+ */
+export function pricePerHundred(p: ProductOption): Kopiyky | null {
+  if (!areUnitsCompatible(p.unit, 'г') && !areUnitsCompatible(p.unit, 'мл')) return null
+  const base = toBase(p.packSize, p.unit)
+  if (base <= 0) return null
+  return Math.round((effectivePrice(p) / base) * 100)
 }

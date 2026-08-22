@@ -12,6 +12,7 @@ import {
   cartQuantity,
   isBelowWeightMinimum,
   weightedStepPrice,
+  pricePerHundred,
 } from '@/lib/domain/pricing'
 import { isPlausibleReadyMeal, isPlausibleIngredientMatch } from '@/lib/agent/tools'
 
@@ -502,5 +503,54 @@ describe('товар має бути самим інгредієнтом, а н�
     expect(isPlausibleIngredientMatch('Шоколад молочний Roshen', 'Шоколад')).toBe(true)
     expect(isPlausibleIngredientMatch('Морозиво пломбір', 'Морозиво')).toBe(true)
     expect(isPlausibleIngredientMatch('Сироп кленовий', 'Сироп')).toBe(true)
+  })
+})
+
+/**
+ * Питома ціна — те, за чим рівні впорядковані насправді.
+ *
+ * Живий приклад із демо: маскарпоне «Преміальний» 159 грн виглядав дешевшим
+ * за «Оптимальний» 279 грн. Помилки в розрахунку не було — різні фасовки
+ * (250 г проти 500 г), — але ярлики про це не казали.
+ */
+describe('ціна за 100 г робить порядок рівнів видимим', () => {
+  it('пояснює, чому дорожчий рівень має менший підсумок', () => {
+    const optimal = product({ productId: 'o', packSize: 500, unit: 'г', price: 27900 })
+    const premium = product({ productId: 'p', packSize: 250, unit: 'г', price: 15900 })
+    // підсумок преміального менший…
+    expect(effectivePrice(premium)).toBeLessThan(effectivePrice(optimal))
+    // …а питома ціна — більша, і саме за нею він преміальний
+    expect(pricePerHundred(premium)!).toBeGreaterThan(pricePerHundred(optimal)!)
+    expect(pricePerHundred(optimal)).toBe(5580)
+    expect(pricePerHundred(premium)).toBe(6360)
+  })
+
+  it('враховує акційну ціну, а не перекреслену', () => {
+    const onSale = product({ productId: 's', packSize: 250, unit: 'г', price: 18900, promoPrice: 15900 })
+    expect(pricePerHundred(onSale)).toBe(6360)
+  })
+
+  it('рахує для обʼєму так само', () => {
+    expect(pricePerHundred(product({ productId: 'v', packSize: 1, unit: 'л', price: 9000 }))).toBe(900)
+  })
+
+  it('не вигадує питомої ціни, коли ваги упаковки немає', () => {
+    expect(pricePerHundred(product({ productId: 'u', packSize: 1, unit: 'уп', price: 12900 }))).toBeNull()
+    expect(pricePerHundred(product({ productId: 'c', packSize: 10, unit: 'шт', price: 5000 }))).toBeNull()
+  })
+
+  it('преміальний більше не обіцяє якості, якої не вимірює', () => {
+    const need = missing({ name: 'Сир', normalizedName: 'сир', needed: 200, have: 0, missing: 200, unit: 'г' })
+    const tiers = buildTiers(
+      [
+        product({ productId: 'a', packSize: 500, unit: 'г', price: 10000 }),
+        product({ productId: 'b', packSize: 400, unit: 'г', price: 12000 }),
+        product({ productId: 'c', packSize: 250, unit: 'г', price: 15900 }),
+      ],
+      need,
+    )
+    const premium = tiers.find((t) => t.tier === 'premium')!
+    expect(premium.rationale).not.toContain('якість')
+    expect(premium.rationale).toContain('100 г')
   })
 })

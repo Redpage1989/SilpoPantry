@@ -847,7 +847,21 @@ export async function addConfirmedItemsToCart(
       throw new ConfirmationRequiredError('Цю пропозицію вже додано до кошика')
     }
 
-    const lines = JSON.parse(proposal.selectedProducts) as ProposalLine[]
+    /**
+     * Тут, на відміну від екрана кошика, мовчати не можна: це запис у
+     * справжній кошик. Порожній або пошкоджений запис означає, що ми не
+     * знаємо, що саме додавати, — і додати «нічого» гірше, ніж сказати про це.
+     */
+    let lines: ProposalLine[]
+    try {
+      const parsed = JSON.parse(proposal.selectedProducts)
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('порожній список')
+      lines = parsed as ProposalLine[]
+    } catch {
+      throw new ConfirmationRequiredError(
+        'Пропозицію пошкоджено — відкрийте страву заново. Кошик не змінено.',
+      )
+    }
 
     /**
      * Пропозиції, збережені до появи полів ваги, не містять `packUnit`.

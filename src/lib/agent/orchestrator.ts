@@ -106,6 +106,16 @@ async function runAgent<T>(
   }
 }
 
+/** Кількість позицій у збереженій чернетці; 0, якщо запис пошкоджений. */
+function countLines(raw: string): number {
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.length : 0
+  } catch {
+    return 0
+  }
+}
+
 function countLiveCalls(trace: TraceStep[]): number {
   return trace.reduce((sum, s) => sum + (s.mcpCalls ?? []).filter((c) => c.mode === 'live').length, 0)
 }
@@ -495,7 +505,8 @@ export async function runCartOverview(userId: string) {
         id: p.id,
         goal: p.goal,
         total: p.totalPrice,
-        lines: (JSON.parse(p.selectedProducts) as ProposalLine[]).length,
+        // пошкоджений JSON однієї чернетки не має віддавати 500 на весь кошик
+        lines: countLines(p.selectedProducts),
         createdAt: p.createdAt.toISOString(),
       })),
     }

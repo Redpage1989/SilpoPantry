@@ -68,6 +68,22 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
 
     await expect(page.getByRole('heading', { name: 'Сканування' })).toBeVisible()
 
+    /**
+     * Чекаємо, поки React справді перехопить поле файлу.
+     *
+     * Розмітка приходить із серверного рендеру, тож і заголовок, і кнопка
+     * видимі ДО гідратації. Якщо покласти файл у цей проміжок, `onChange`
+     * не спрацює, стан лишиться порожнім — і тест падає на «Фото до аналізу»,
+     * хоча застосунок справний. Саме це давало ~25% плаваючих провалів.
+     *
+     * Наявність внутрішнього ключа `__react*` на елементі — єдина ознака,
+     * яка відрізняє «намальовано» від «живе».
+     */
+    await page.waitForFunction(() => {
+      const el = document.querySelector('[data-testid="scan-file-input"]')
+      return !!el && Object.keys(el).some((k) => k.startsWith('__react'))
+    })
+
     await page.getByTestId('scan-file-input').setInputFiles({
       name: 'fridge.png',
       mimeType: 'image/png',
@@ -91,6 +107,15 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
 
     // Позиції справді потрапили в комору
     await page.getByRole('link', { name: 'Комора' }).click()
+    /**
+     * Спершу дочекатись самої навігації, і лише потім вмісту.
+     *
+     * Клік по посиланню відбувається одразу після router.refresh() на екрані
+     * сканування; поки той у польоті, перехід може не початись. Без цього
+     * рядка падіння виглядало як «немає заголовка «Домашня комора»», хоча
+     * насправді сторінка ще не та.
+     */
+    await page.waitForURL('**/pantry')
     await expect(page.getByRole('heading', { name: 'Домашня комора' })).toBeVisible()
     await expect(page.getByText('Фото', { exact: true }).first()).toBeVisible()
   })

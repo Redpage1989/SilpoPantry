@@ -106,6 +106,17 @@ export default async function TracePage() {
         )}
       </Card>
 
+      <SectionTitle>Бренд і матеріали</SectionTitle>
+      <Card className="mb-4 bg-cream-50">
+        <p className="text-[12px] leading-relaxed text-graphite-500">
+          Офіційні логотипи, шрифти та фірмова графіка ТОВ «Сільпо» у застосунку{' '}
+          <strong className="text-graphite-700">не використані</strong> — бренд-асети не входять
+          в умови хакатону. Уся айдентика на екранах власна: назва «Сімейна комора», палітра
+          й іконки зроблені для цього прототипу. Застосунок не є офіційним продуктом
+          ТОВ «Сільпо», демонстраційні дані вигадані.
+        </p>
+      </Card>
+
       <Card className="bg-cream-50">
         <div className="text-[13px] font-semibold text-graphite-700">Що НЕ потрапляє в трейс і логи</div>
         <ul className="mt-1.5 list-disc pl-4 text-[12px] leading-relaxed text-graphite-500">

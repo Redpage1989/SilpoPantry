@@ -159,14 +159,23 @@ export function ModeBadge({ mode, reason }: { mode: 'live' | 'mock'; reason?: st
 }
 
 /** Місце під офіційні логотипи «Сільпо», які додасть власник проєкту. */
-export function BrandSlot({ label = 'Місце для офіційного логотипа «Сільпо»' }: { label?: string }) {
+/**
+ * Власний вордмарк застосунку.
+ *
+ * Раніше тут стояла пунктирна рамка «Місце для офіційного логотипа «Сільпо»».
+ * Вона була чесною, але платила за чесність найдорожчим місцем екрана — і в
+ * кадрі читалась не як повага до чужого бренду, а як недоробка.
+ *
+ * «Сімейна комора» — НАША назва, а не «Сільпо», тож її можна ставити без
+ * жодного стороннього бренд-асета. Заява про те, що логотипи «Сільпо» не
+ * використані, переїхала на /trace, де чесність перед журі є темою екрана.
+ */
+export function Wordmark({ className }: { className?: string }) {
   return (
-    <div
-      aria-label={label}
-      className="flex h-9 items-center justify-center rounded-xl border border-dashed border-accent-300 px-3 text-[11px] text-accent-700"
-    >
-      {label}
-    </div>
+    <span className={cn('inline-flex items-center gap-1.5 text-[12px] font-medium text-graphite-500', className)}>
+      <span aria-hidden>🧺</span>
+      Сімейна комора
+    </span>
   )
 }
 

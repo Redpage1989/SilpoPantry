@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getUserId } from '@/lib/session'
 import { runDashboard } from '@/lib/agent/orchestrator'
-import { Badge, BrandSlot, Card, LinkButton, ModeBadge, Progress, SectionTitle } from '@/components/ui'
+import { Badge, Card, LinkButton, ModeBadge, Progress, SectionTitle, Wordmark } from '@/components/ui'
 import { formatUah, pluralize } from '@/lib/domain/scoring'
 import { expiryStatus, daysUntil } from '@/lib/domain/pantry'
 import { displayName } from '@/lib/domain/normalize'
@@ -53,20 +53,17 @@ export default async function HomePage() {
 
   return (
     <main className="safe-top px-4 pb-6 pt-4">
-      <header className="mb-4 flex items-center justify-between gap-2">
+      <header className="mb-5 flex items-start justify-between gap-2">
         <div>
-          <div className="text-[12px] text-graphite-500">Вітаємо,</div>
-          <h1 className="text-[22px] font-bold leading-tight tracking-tight">{household.displayName}</h1>
+          <Wordmark />
+          <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight">
+            Вітаємо, {household.displayName}
+          </h1>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <ModeBadge mode={run.mode} reason={run.modeReason} />
-          <Badge tone="accent">Hackathon prototype</Badge>
-        </div>
+        {/* Один бейдж замість двох: «DEMO MODE» уже каже, що це не продакшн,
+            а «Hackathon prototype» лишився на /login і /trace */}
+        <ModeBadge mode={run.mode} reason={run.modeReason} />
       </header>
-
-      <div className="mb-4">
-        <BrandSlot />
-      </div>
 
       {/* Швидкі дії — найбільші кнопки на екрані */}
       <div className="mb-5 grid grid-cols-2 gap-3">

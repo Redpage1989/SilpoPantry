@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getUserId } from '@/lib/session'
 import { config } from '@/lib/config'
-import { Card, BrandSlot, Badge } from '@/components/ui'
+import { Card, Badge, Wordmark } from '@/components/ui'
 import { LoginActions } from './LoginActions'
 
 export const dynamic = 'force-dynamic'
@@ -18,7 +18,7 @@ export default async function LoginPage({
   return (
     <main className="safe-top min-h-[100dvh] px-4 pb-8 pt-8">
       <div className="mb-6 flex items-center justify-between gap-3">
-        <BrandSlot />
+        <Wordmark />
         <Badge tone="accent">Hackathon prototype</Badge>
       </div>
 

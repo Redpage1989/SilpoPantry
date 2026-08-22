@@ -317,6 +317,14 @@ export async function runDishPlan(
       comparisons,
       cookVsReady,
       proposal,
+      /**
+       * Тижневий бюджет родини їде на екран страви.
+       *
+       * Застосунок знав його від початку — і мовчки пропонував десерт, який
+       * коштує більше за весь тиждень. Агент, який бачить бюджет і не каже
+       * про нього, працює на кошик, а не на родину.
+       */
+      weeklyBudget: household.weeklyBudget,
       totalsByTier: {
         budget: totalForTier(comparisons, 'budget'),
         optimal: totalForTier(comparisons, 'optimal'),

@@ -69,6 +69,8 @@ interface DishPlanResponse {
     alternatives: { productId: string; name: string; price: number; promoPrice?: number }[]
   }
   proposal: { proposalId: string; confirmationToken: string; total: number } | null
+  /** тижневий бюджет родини; null, якщо не заданий */
+  weeklyBudget: number | null
   totalsByTier: Record<string, number>
 }
 
@@ -163,6 +165,17 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
   const servingsCount = data?.servings ?? 1
   const cookPerServing = servingsCount > 0 ? Math.round(selectedConsumed / servingsCount) : selectedConsumed
   const readyTotal = data?.cookVsReady.comparison.ready?.totalCost ?? null
+
+  /**
+   * Чи вибір виходить за тижневий бюджет родини.
+   *
+   * Застосунок знав бюджет від початку і мовчки пропонував страву, дорожчу за
+   * весь тиждень. Це не привід блокувати вибір — людина має право на десерт, —
+   * але промовчати про це означає працювати на кошик, а не на родину.
+   */
+  const budget = data?.weeklyBudget ?? null
+  const overBudget = budget !== null && budget > 0 && selectedTotal > budget
+  const cheapestTotal = data?.totalsByTier.budget ?? 0
   /** той самий поріг, що й на сервері: різниця до 20 грн — нічия */
   const verdict: 'cook' | 'ready' | 'tie' =
     readyTotal === null ? 'cook' : Math.abs(readyTotal - selectedConsumed) < 2000 ? 'tie' : readyTotal > selectedConsumed ? 'cook' : 'ready'
@@ -473,6 +486,30 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                     {pluralize(data.comparisons.length, 'позиція', 'позиції', 'позицій')} ·{' '}
                     {mixed ? 'ваш власний вибір' : `рівень «${TIER_LABELS[tier]}»`}
                   </p>
+                  {overBudget && (
+                    <div className="mt-3 rounded-2xl bg-warn-50 p-3 text-[12px] leading-snug text-[#8a6200]">
+                      Це {formatUah(selectedTotal)} — більше за ваш тижневий бюджет{' '}
+                      {formatUah(budget!)}.
+                      {/*
+                        Дешевший рівень пропонуємо ЛИШЕ якщо він справді
+                        вкладається в бюджет. Інакше це порада, яка проблеми
+                        не вирішує, — а виглядає як вирішення.
+                      */}
+                      {cheapestTotal > 0 && cheapestTotal < selectedTotal && cheapestTotal <= budget! && (
+                        <>
+                          {' '}
+                          Бюджетний рівень вкладається — {formatUah(cheapestTotal)}.
+                        </>
+                      )}
+                      {cheapestTotal > 0 && cheapestTotal < selectedTotal && cheapestTotal > budget! && (
+                        <>
+                          {' '}
+                          Навіть бюджетний рівень виходить за нього ({formatUah(cheapestTotal)}),
+                          тож ідеться про свідому витрату.
+                        </>
+                      )}
+                    </div>
+                  )}
                   <Button full className="mt-3" onClick={() => setConfirming(true)}>
                     Додати до кошика
                   </Button>

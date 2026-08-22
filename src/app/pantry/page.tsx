@@ -1,11 +1,10 @@
 import { redirect } from 'next/navigation'
 import { getUserId } from '@/lib/session'
-import { loadPantry } from '@/lib/agent/tools'
+import { loadPantry, loadHouseholdBasics } from '@/lib/agent/tools'
 import { resolveAdapterSafe } from '@/lib/mcp'
 import { Badge, Card, ModeBadge, SectionTitle, Stat } from '@/components/ui'
 import { STORAGE_LABELS, SOURCE_LABELS, type StorageLocation, type PantrySource } from '@/lib/domain/types'
 import { expiryStatus, daysUntil, EXPIRY_LABELS, estimateDaysOfFood, STAPLES, confidenceLabel, confidenceTone } from '@/lib/domain/pantry'
-import { prisma } from '@/lib/db'
 import { pluralize, formatUah } from '@/lib/domain/scoring'
 import { formatQuantity } from '@/lib/domain/units'
 import { displayName } from '@/lib/domain/normalize'
@@ -19,10 +18,10 @@ export default async function PantryPage() {
   const userId = await getUserId()
   if (!userId) redirect('/login')
 
-  const [items, { adapter, reason }, user] = await Promise.all([
+  const [items, { adapter, reason }, household] = await Promise.all([
     loadPantry(userId),
     resolveAdapterSafe(userId),
-    prisma.user.findUnique({ where: { id: userId }, include: { members: true } }),
+    loadHouseholdBasics(userId),
   ])
   const now = new Date()
 
@@ -33,8 +32,7 @@ export default async function PantryPage() {
    * На головній вони були двома з восьми карток однакової ваги й тягнули
    * увагу на себе, не будучи причиною відкрити застосунок.
    */
-  const people = Math.max(1, user?.members.length ?? 1)
-  const daysOfFood = estimateDaysOfFood(items, people, user?.mealsPerDay ?? 3)
+  const daysOfFood = estimateDaysOfFood(items, household.people, household.mealsPerDay)
   const have = new Set(items.map((i) => i.normalizedName))
   const restock = STAPLES.filter((name) => !have.has(name))
 
@@ -69,7 +67,7 @@ export default async function PantryPage() {
                 ? 'менше дня'
                 : `≈ ${Math.round(daysOfFood)} ${pluralize(Math.round(daysOfFood), 'день', 'дні', 'днів')}`
             }
-            hint={`на ${people} ос.`}
+            hint={`на ${household.people} ос.`}
           />
           <div className="w-px bg-cream-200" />
           <Stat
@@ -82,8 +80,8 @@ export default async function PantryPage() {
               хоча людина задавала бюджет в онбордингу й має його десь бачити */}
           <Stat
             label="Бюджет на тиждень"
-            value={user?.weeklyBudget ? formatUah(user.weeklyBudget) : '—'}
-            hint={user?.weeklyBudget ? 'задано в налаштуваннях' : 'не заданий'}
+            value={household.weeklyBudget ? formatUah(household.weeklyBudget) : '—'}
+            hint={household.weeklyBudget ? 'задано в налаштуваннях' : 'не заданий'}
           />
         </div>
       </Card>

@@ -107,6 +107,31 @@ async function step<T>(
 
 export const GetHouseholdContextInput = z.object({})
 
+/**
+ * Легкий зріз даних родини для сторінок, яким не потрібен ToolContext.
+ *
+ * Екран комори рахував кількість людей власним prisma-запитом — друге
+ * джерело правди, яке розійшлося б із getHouseholdContext при першій же
+ * зміні семантики (наприклад, «рахувати лише дорослих»). Повний
+ * getHouseholdContext сюди не підходить: він вимагає адаптер і трейс
+ * заради двох чисел.
+ */
+export async function loadHouseholdBasics(userId: string): Promise<{
+  people: number
+  mealsPerDay: number
+  weeklyBudget: number | null
+}> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { members: { select: { id: true } } },
+  })
+  return {
+    people: Math.max(1, user?.members.length ?? 1),
+    mealsPerDay: user?.mealsPerDay ?? 3,
+    weeklyBudget: user?.weeklyBudget ?? null,
+  }
+}
+
 export async function getHouseholdContext(ctx: ToolContext): Promise<HouseholdContext> {
   return step(ctx, 'getHouseholdContext', {}, async () => {
     const user = await prisma.user.findUniqueOrThrow({

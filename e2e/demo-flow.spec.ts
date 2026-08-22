@@ -210,6 +210,21 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
     await expect(page.getByText('Балабонуси')).toBeVisible()
     await expect(page.getByText('Доставка').first()).toBeVisible()
     await expect(page.getByRole('link', { name: /Перейти до оформлення/ })).toBeVisible()
+
+    /**
+     * Керування кількістю — регресійна поверхня рев'ю: тут ламались і
+     * ідентифікатори offer'а, і гонки швидких натискань. «+» має збільшити
+     * кількість першого рядка з 1 до 2, «Прибрати» — зменшити число позицій.
+     */
+    const firstQty = page.getByText(/^1 шт$/).first()
+    await expect(firstQty).toBeVisible()
+    await page.getByRole('button', { name: /Збільшити кількість/ }).first().click()
+    await expect(page.getByText(/^2 шт$/).first()).toBeVisible({ timeout: 15_000 })
+
+    const removeButtons = page.getByRole('button', { name: /Прибрати з кошика/ })
+    const before = await removeButtons.count()
+    await removeButtons.first().click()
+    await expect(removeButtons).toHaveCount(before - 1, { timeout: 15_000 })
   })
 
   test('7. Agent trace показує кроки й не містить приватних даних', async ({ page }) => {

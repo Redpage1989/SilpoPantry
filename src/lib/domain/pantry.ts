@@ -214,3 +214,16 @@ export function confidenceLabel(confidence: number): string {
   if (confidence >= 0.6) return 'приблизно'
   return 'варто перевірити'
 }
+
+/**
+ * Тон бейджа впевненості — ті САМІ пороги, що й у confidenceLabel.
+ *
+ * Коли пороги жили окремо (0.8/0.5 у комори, 0.85/0.6 в сканера), confidence
+ * 0.82 давав зелений бейдж зі словом «приблизно», а той самий товар на /scan
+ * був жовтим. Слова виказали розбіжність, яку відсотки ховали.
+ */
+export function confidenceTone(confidence: number): 'success' | 'warn' | 'danger' {
+  if (confidence >= 0.85) return 'success'
+  if (confidence >= 0.6) return 'warn'
+  return 'danger'
+}

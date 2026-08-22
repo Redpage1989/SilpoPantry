@@ -716,68 +716,11 @@ export async function compareCookVsReadyMeal(
  * Пошук за словом «тірамісу» повертає і торт, і шоколад «смак тірамісу»,
  * і морозиво — порівнювати ціну порції з шоколадкою було б безглуздо.
  */
-/**
- * Форми, які означають ІНШИЙ продукт, а не інгредієнт.
- *
- * Слово відсіює товар лише тоді, коли самого інгредієнта воно не стосується:
- * для «шоколад» товар із «шоколадний» цілком доречний, для «яйця» — ні.
- */
-const NOT_AN_INGREDIENT = [
-  'шоколад',
-  'цукерк',
-  'батончик',
-  'драже',
-  'морозиво',
-  'лікер',
-  'напій',
-  'плитка',
-  'сироп',
-]
+// Перевірки правдоподібності товару переїхали в домен: див. domain/matching.ts.
+// Імпорт + re-експорт: функції потрібні й цьому модулю, і зовнішнім споживачам.
+import { isPlausibleIngredientMatch, isPlausibleReadyMeal } from '@/lib/domain/matching'
+export { isPlausibleIngredientMatch, isPlausibleReadyMeal }
 
-/**
- * Чи схожий товар на сам інгредієнт, а не на солодощі з його назвою.
- *
- * Живий приклад із прогону «тірамісу»: на «Яйця» каталог повернув
- * «Яйце шоколадне The Smurfs із сюрпризом», на «Какао» — «Какао-плитка»,
- * на «Маскарпоне» — «Десерт Bonjour зі смаком чорниці та маскарпоне».
- */
-export function isPlausibleIngredientMatch(productName: string, ingredientName: string): boolean {
-  const name = productName.toLowerCase()
-  const ingredient = ingredientName.toLowerCase()
-
-  // «зі смаком X» — ароматизований продукт, а не сам X
-  if (name.includes('смак') && !ingredient.includes('смак')) return false
-  if (NOT_AN_INGREDIENT.some((w) => name.includes(w) && !ingredient.includes(w))) return false
-
-  /**
-   * Чорного списку замало: він прибирає НЕ ТІ форми, але ніде не перевіряє,
-   * що товар узагалі є цим інгредієнтом. На живому каталозі це дало
-   * «Молоко пастеризоване» на запит «Яйця» — і молоко стало бюджетним
-   * рівнем, бо було найдешевшим. Пошук «Сільпо» знаходить за схожістю, тож
-   * «Маскарпоне» приводило «Тістечко Макарон».
-   *
-   * Тому позитивна перевірка з двох умов, і обидві потрібні:
-   *   · нормалізовані ключі збігаються — ловить «Яйця курячі Свіжак»;
-   *   · або назва містить ключ інгредієнта — ловить «Сир Ghidetti
-   *     «Маскарпоне» 45%», де ключ товару «сир», а не «маскарпоне».
-   *
-   * Самого нормалізатора мало: він звів би правильне савоярді до «печиво»
-   * і відкинув його разом зі сміттям.
-   */
-  const key = normalizeProductName(ingredientName)
-  if (key.length === 0) return true
-  return normalizeProductName(productName) === key || name.includes(key)
-}
-
-export function isPlausibleReadyMeal(productName: string, dishTitle: string): boolean {
-  const name = productName.toLowerCase()
-  const dish = dishTitle.toLowerCase()
-  if (!name.includes(dish.split(' ')[0])) return false
-  // «зі смаком X» — це ароматизований продукт, а не сама страва
-  if (name.includes('смак')) return false
-  const NOT_A_DISH = ['шоколад', 'морозиво', 'напій', 'сироп', 'кава', 'йогурт', 'печиво', 'батончик', 'цукерк']
-  return !NOT_A_DISH.some((w) => name.includes(w))
-}
 
 // ─────────────────────────── 5. Пропозиція та кошик ───────────────────────────
 
@@ -938,7 +881,7 @@ export async function getCartSummary(ctx: ToolContext) {
   return step(ctx, 'getCartSummary', {}, async () => {
     const [cart, loyalty, coupons, slots] = await Promise.all([
       ctx.adapter.getCart(),
-      ctx.adapter.getLoyalty().catch(() => ({ balabonuses: 0 })),
+      ctx.adapter.getLoyalty().catch(() => ({ balabonuses: 0, level: undefined })),
       ctx.adapter.getCoupons().catch(() => []),
       ctx.adapter.getTimeSlots().catch(() => []),
     ])

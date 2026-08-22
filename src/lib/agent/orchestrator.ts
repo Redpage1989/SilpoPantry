@@ -2,7 +2,6 @@ import { prisma } from '@/lib/db'
 import { sanitizeForTrace, logEvent } from '@/lib/mcp/pii'
 import { formatUah } from '@/lib/domain/scoring'
 import { effectivePrice } from '@/lib/domain/pricing'
-import { STAPLES } from '@/lib/domain/pantry'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
 import type { HouseholdContext, PantryEntry, RecipeLike, Kopiyky, MissingIngredient } from '@/lib/domain/types'
 import type { ScoredRecipe } from '@/lib/domain/scoring'
@@ -127,20 +126,22 @@ export interface DashboardData {
   pantry: PantryEntry[]
   expiring: PantryEntry[]
   suggestions: ScoredRecipe[]
-  daysOfFood: number
-  cart: Awaited<ReturnType<typeof getCartSummary>>['cart']
-  promos: { promoId: string; title: string }[]
-  loyalty: { balabonuses: number; level?: string }
-  restock: { name: string; reason: string }[]
 }
 
 export async function runDashboard(userId: string): Promise<AgentResult<DashboardData>> {
+  /**
+   * План відповідає тому, що екран СПРАВДІ показує.
+   *
+   * Після розвантаження головної тут ще лишалися кошик, акції, балабонуси
+   * й список «докупити» — дані тяглися (у live це зайві MCP-виклики на
+   * кожне відкриття), викидались, а трейс для журі описував крок, результату
+   * якого на екрані немає.
+   */
   const plan: PlanStep[] = [
     { n: 1, tool: 'getHouseholdContext', why: 'Дізнатись склад родини, бюджет і ліміт часу' },
     { n: 2, tool: 'getPantryInventory', why: 'Прочитати актуальні домашні залишки' },
     { n: 3, tool: 'findExpiringProducts', why: 'Знайти те, що треба спожити найближчим часом' },
     { n: 4, tool: 'generateRecipeOptions', why: 'Підібрати страви під наявні продукти' },
-    { n: 5, tool: 'getCartSummary', why: 'Показати стан кошика, акції та балабонуси' },
   ]
 
   return runAgent(userId, 'Показати головний екран із персональними рекомендаціями', plan, async (ctx) => {
@@ -153,43 +154,8 @@ export async function runDashboard(userId: string): Promise<AgentResult<Dashboar
       household,
       pantry,
     )
-    const { cart, loyalty } = await getCartSummary(ctx)
-    const promos = await ctx.adapter.getPromos().catch(() => [])
-    ctx.adapter.drainTrace()
-
-    const { estimateDaysOfFood } = await import('@/lib/domain/pantry')
-    const daysOfFood = estimateDaysOfFood(pantry, household.members.length, household.mealsPerDay)
-
-    return {
-      household,
-      pantry,
-      expiring,
-      suggestions,
-      daysOfFood,
-      cart,
-      promos: promos.map((p) => ({ promoId: p.promoId, title: p.title })),
-      loyalty,
-      restock: buildRestockList(pantry, suggestions),
-    }
+    return { household, pantry, expiring, suggestions }
   })
-}
-
-/** Що варто докупити: базові продукти, яких мало або немає. */
-function buildRestockList(pantry: PantryEntry[], suggestions: ScoredRecipe[]): { name: string; reason: string }[] {
-  const have = new Set(pantry.map((p) => p.normalizedName))
-  const out: { name: string; reason: string }[] = []
-
-  for (const staple of STAPLES) {
-    if (!have.has(staple)) out.push({ name: staple, reason: 'Базовий продукт закінчився' })
-  }
-  for (const s of suggestions) {
-    for (const m of s.coverage.missing.filter((x) => !x.optional).slice(0, 2)) {
-      if (!out.some((o) => o.name === m.normalizedName)) {
-        out.push({ name: m.normalizedName, reason: `Потрібно для страви «${s.recipe.title}»` })
-      }
-    }
-  }
-  return out.slice(0, 6)
 }
 
 // ─────────────────────────── Сценарій B: що приготувати ───────────────────────────

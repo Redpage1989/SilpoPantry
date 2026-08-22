@@ -17,6 +17,19 @@ import { logEvent } from '@/lib/mcp/pii'
 export async function closeFinishedWeeks(now: Date): Promise<number> {
   const current = isoWeek(now)
 
+  /**
+   * Дешевий вихід для стабільного стану.
+   *
+   * Виклик стоїть на читанні стрічки, а findMany з distinct нижче Prisma
+   * виконує В ПАМ'ЯТІ — тобто тягне всі не-поточні голоси при кожному GET,
+   * і ця купа росте назавжди. Якщо минулий тиждень уже закритий — закривати
+   * нічого: голосувати можна лише за поточний, тож нових «відкритих» минулих
+   * тижнів між двома читаннями з'явитись не може.
+   */
+  const previous = isoWeek(new Date(now.getTime() - 7 * 86_400_000))
+  const prevClosed = await prisma.weeklyAward.findUnique({ where: { isoWeek: previous } })
+  if (prevClosed) return 0
+
   const weeks = await prisma.recipeVote.findMany({
     where: { isoWeek: { not: current } },
     distinct: ['isoWeek'],

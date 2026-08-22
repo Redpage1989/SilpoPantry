@@ -61,7 +61,8 @@ export default async function HomePage() {
           </h1>
         </div>
         {/* Один бейдж замість двох: «DEMO MODE» уже каже, що це не продакшн,
-            а «Hackathon prototype» лишився на /login і /trace */}
+            а «Hackathon prototype» лишився на /login — першому екрані, який
+            бачить журі */}
         <ModeBadge mode={run.mode} reason={run.modeReason} />
       </header>
 

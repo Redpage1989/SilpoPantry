@@ -36,7 +36,7 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
 
     // бейдж режиму присутній і чесно каже, що це демо
     await expect(page.getByText('DEMO MODE')).toBeVisible()
-    // «Hackathon prototype» лишився на /login і /trace: два бейджі поруч
+    // «Hackathon prototype» лишився на /login: два бейджі поруч
     // казали те саме двічі й займали верхній ряд головної
     await expect(page.getByText('Сімейна комора').first()).toBeVisible()
 

@@ -77,7 +77,7 @@ export default async function CartPage() {
         </Card>
       ) : (
         <>
-          <CartLines lines={cart.lines} />
+          <CartLines lines={cart.lines} mode={run.mode} />
 
           <Card className="mb-4">
             <Row label="Сума" value={formatUah(cart.subtotal)} />
@@ -120,7 +120,10 @@ export default async function CartPage() {
         )}
         <div className="flex items-center justify-between gap-2">
           <span className="text-[13px] text-graphite-700">Балабонуси</span>
-          <Badge tone="accent">{loyalty.balabonuses}</Badge>
+          <Badge tone="accent">
+            {loyalty.balabonuses}
+            {loyalty.level ? ` · ${loyalty.level}` : ''}
+          </Badge>
         </div>
         {coupons.length > 0 && (
           <ul className="mt-3 space-y-2 border-t border-cream-200 pt-3">
@@ -131,8 +134,14 @@ export default async function CartPage() {
                   <div className="font-medium text-graphite-900">{c.title}</div>
                   {c.validUntil && (
                     <div className="text-[11px] text-graphite-500">
-                      {/* «до 2026-09-20» — формат бази, а не спосіб, у який люди говорять про дати */}
-                      діє до {new Date(c.validUntil).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' })}
+                      {/*
+                        Живий MCP не гарантує формату дати. Непарсибельний рядок
+                        показуємо як є: «до 20.09.2026» гірше за «до Invalid Date»
+                        лише в одному випадку — нашому. UTC фіксується, бо ISO-дата
+                        без часу парситься як північ UTC і на сервері в іншому
+                        поясі зсувалась би на день.
+                      */}
+                      діє до {formatCouponDate(c.validUntil)}
                     </div>
                   )}
                 </div>
@@ -225,4 +234,10 @@ function formatSlot(from: string, to: string): string {
   } catch {
     return `${from} – ${to}`
   }
+}
+
+function formatCouponDate(raw: string): string {
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return raw
+  return d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', timeZone: 'UTC' })
 }

@@ -496,25 +496,35 @@ export class LiveSilpoAdapter implements SilpoAdapter {
    * (у схемі стоїть exclusiveMinimum), і це правильніше, ніж лишати
    * порожній рядок у кошику.
    */
-  async setCartQuantity(productId: string, quantity: number): Promise<SilpoCart> {
+  async setCartQuantity(
+    productId: string,
+    quantity: number,
+    source?: { companyId?: string; branchId?: string },
+  ): Promise<SilpoCart> {
     if (quantity <= 0) return this.removeFromCart([productId])
     const cartId = await this.ensureCartId()
     const ctx = await this.ensureContext()
+    /**
+     * Пара companyId+branchId має описувати САМЕ ЦЕЙ рядок кошика.
+     * Раніше бралась із контексту доставки: його companyId часто відсутній
+     * (bootstrap із cart-head його не дає) — і кожне натискання «−/+» падало
+     * на валідації схеми ще до відправки; а для кошика з кількох філій
+     * контекстна філія цілила в чужий offer.
+     */
+    const companyId = source?.companyId ?? ctx.companyId
+    const branchId = source?.branchId ?? ctx.branchId
+    if (!companyId || !branchId) {
+      throw new Error(
+        `Для «${productId}» бракує companyId або branchId — «Сільпо» не прийме зміну кількості`,
+      )
+    }
     await this.call<unknown>({
       candidates: ['silpo_add_or_update_cart_products', 'add_or_update_cart_products'],
       keywords: ['cart', 'add'],
       write: true,
       buildArgs: () => ({
         shoppingCartId: cartId,
-        products: [
-          {
-            productId,
-            companyId: ctx.companyId,
-            branchId: ctx.branchId,
-            quantity,
-            addQuantity: false,
-          },
-        ],
+        products: [{ productId, companyId, branchId, quantity, addQuantity: false }],
       }),
     })
     return this.getCart()
@@ -746,12 +756,18 @@ function toCart(raw: Record<string, unknown>, knownId?: string | null): SilpoCar
       const current = toKopiyky(pickNumber(it, ['price'])) ?? 0
       const old = toKopiyky(pickNumber(it, ['oldPrice']))
       const hasPromo = old !== undefined && old > current && current > 0
+      const weighted = it.weighted === true
+      const step = pickNumber(it, ['addToBasketStep', 'step'])
       return {
         productId: pickString(it, ['productId', 'id']) ?? '',
         name: pickString(it, ['name', 'title']) ?? 'Товар',
         quantity: pickNumber(it, ['quantity', 'qty']) ?? 1,
         price: hasPromo ? old! : current,
         promoPrice: hasPromo ? current : undefined,
+        companyId: pickString(it, ['companyId']),
+        branchId: pickString(it, ['branchId']) ?? pickString(shipment, ['branchId']),
+        weighted: weighted || undefined,
+        step: weighted && step && step > 0 ? step : undefined,
       }
     }),
   )

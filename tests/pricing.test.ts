@@ -585,3 +585,43 @@ describe('товар мусить бути самим інгредієнтом',
     expect(isPlausibleIngredientMatch('Яйце шоколадне The Smurfs із сюрпризом', 'Яйця')).toBe(false)
   })
 })
+
+/**
+ * Уточнення фільтра після рев'ю: багатослівні ключі й межі слова.
+ * Приклади «Сир Гауда» і «Філе грудки курячої» — з живих прогонів, де
+ * попередня версія мовчки викидала доречні товари з рівнів.
+ */
+describe('фільтр: багатослівні ключі й межі слова', () => {
+  it('товар із ключем-словом багатослівного ключа проходить', () => {
+    expect(isPlausibleIngredientMatch('Сир Гауда 45%', 'Сир твердий')).toBe(true)
+    expect(isPlausibleIngredientMatch('Сир Пармезан витриманий', 'Сир твердий')).toBe(true)
+  })
+
+  it('збіг із неголовним словом вимагає сліду головного', () => {
+    expect(isPlausibleIngredientMatch('Філе грудки курячої охолоджене', 'Куряче філе')).toBe(true)
+    // філе, але не те: слідів «куряч-» у назві немає
+    expect(isPlausibleIngredientMatch('Філе лосося охолоджене', 'Куряче філе')).toBe(false)
+  })
+
+  it('bare-ключ зі спільноти не матчить похідні слова', () => {
+    // «\b» у JS не працює з кирилицею — межі перевіряються вручну
+    expect(isPlausibleIngredientMatch('Сирок глазурований', 'Сир')).toBe(false)
+    expect(isPlausibleIngredientMatch('Сирники заморожені', 'Сир')).toBe(false)
+    expect(isPlausibleIngredientMatch('Сир кисломолочний 9%', 'Сир')).toBe(true)
+  })
+})
+
+describe('rationale преміального не обіцяє метрики, якої немає', () => {
+  it('для товарів без ваги — підсумкова ціна, а не «за 100 г»', () => {
+    const need = missing({ name: 'Сир', normalizedName: 'сир', needed: 200, have: 0, missing: 200, unit: 'г' })
+    const tiers = buildTiers(
+      [
+        product({ productId: 'a', packSize: 1, unit: 'уп', price: 8900 }),
+        product({ productId: 'b', packSize: 1, unit: 'уп', price: 12900 }),
+        product({ productId: 'c', packSize: 1, unit: 'уп', price: 24900 }),
+      ],
+      need,
+    )
+    expect(tiers.find((t) => t.tier === 'premium')!.rationale).not.toContain('100 г')
+  })
+})

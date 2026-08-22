@@ -66,6 +66,17 @@ export default defineConfig({
          * демо-користувача (див. src/app/api/dev/reset/route.ts).
          * На сервері вона не задана й задаватись не має.
          */
-        env: { E2E_TEST_RESET: 'true' },
+        env: {
+          E2E_TEST_RESET: 'true',
+          /**
+           * next start = NODE_ENV=production, а там застосунок свідомо
+           * відмовляється стартувати без SESSION_SECRET. На свіжому клоні
+           * (.env.example має порожній секрет) це давало 500 на кожен запит
+           * і тести, що вмирали на незрозумілих таймаутах. Тестовий секрет
+           * підставляється ЛИШЕ якщо справжнього немає, і лише для процесу
+           * тестів — строгість продакшн-сервера не зачеплена.
+           */
+          SESSION_SECRET: process.env.SESSION_SECRET || 'e2e-only-secret-not-for-production',
+        },
       },
 })

@@ -6,6 +6,7 @@ import {
   slugifyTitle,
   isoWeek,
   pickWeeklyWinner,
+  weekLabel,
 } from '@/lib/domain/user-recipes'
 import { logEvent } from '@/lib/mcp/pii'
 import { closeFinishedWeeks } from '@/lib/awards'
@@ -112,6 +113,13 @@ export async function GET(request: Request) {
 
     return {
       isoWeek: week,
+      /**
+       * Підпис тижня рендериться СЕРВЕРОМ. Клієнт порівнював серверний ключ
+       * зі своїм годинником: сервер на UTC + клієнт у Києві вночі понеділка
+       * бачив «11.08–17.08» замість «цього тижня», хоча голоси писались у
+       * серверний тиждень. Один годинник — одна правда.
+       */
+      weekLabelText: weekLabel(week, now),
       winner,
       /**
        * Приз показуємо як пропозицію застосунку, а не як обіцянку «Сільпо»:
@@ -125,6 +133,7 @@ export async function GET(request: Request) {
       },
       awards: awards.map((a) => ({
         isoWeek: a.isoWeek,
+        weekLabelText: weekLabel(a.isoWeek, now),
         title: a.recipe.title,
         slug: a.recipe.slug,
         imageEmoji: a.recipe.imageEmoji,

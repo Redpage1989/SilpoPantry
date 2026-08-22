@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { resetDemoCart } from '@/lib/mcp/mock-adapter'
 import { seedDemoUser, seedRecipes } from '@/lib/seed/demo'
 import { errorResponse } from '@/lib/api'
-import { getUserId } from '@/lib/session'
+import { getUserId, rateLimit } from '@/lib/session'
 
 /**
  * Скидання demo-стану до seed-значень.
@@ -28,6 +28,16 @@ export async function POST() {
   const testReset = process.env.E2E_TEST_RESET === 'true'
   if (process.env.NODE_ENV === 'production' && !testReset) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  /**
+   * Маршрут свідомо працює без сесії (перший виклик E2E ще не має куки),
+   * тож зазвичайний handle() із CSRF тут не підходить. Але без жодного
+   * ліміту той, хто знайшов би маршрут з увімкненим флагом, міг би скидати
+   * демо-стан у циклі посеред показу журі. Глобальний ліміт це закриває,
+   * а тестам вистачає з запасом: у прогоні 8 скидань за ~хвилину.
+   */
+  if (!rateLimit('dev-reset-global', 30)) {
+    return NextResponse.json({ error: 'Забагато запитів' }, { status: 429 })
   }
   try {
     const userId = (await getUserId()) ?? 'demo-user'

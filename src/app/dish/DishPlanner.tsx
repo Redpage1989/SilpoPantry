@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation } from '@tanstack/react-query'
 import { Badge, Button, Card, InfoNote, ModeBadge, SectionTitle } from '@/components/ui'
 import { apiPost, ApiError } from '@/lib/client'
 import { formatUah, pluralize } from '@/lib/domain/scoring'
 import { formatQuantity } from '@/lib/domain/units'
-import { isBelowWeightMinimum, pricePerHundred } from '@/lib/domain/pricing'
+import { isBelowWeightMinimum, pricePerHundred, COOK_VS_READY_TIE_KOPIYKY } from '@/lib/domain/pricing'
 import { TIER_LABELS, type ProductTier, type Unit } from '@/lib/domain/types'
 import { AgentTrace } from '@/components/AgentTrace'
 import type { TraceStep } from '@/lib/agent/tools'
@@ -83,7 +83,17 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
   const [tier, setTier] = useState<ProductTier>('optimal')
   const [chosen, setChosen] = useState<Record<string, string>>({})
   const [confirming, setConfirming] = useState(false)
-  const [added, setAdded] = useState<{ total: number; lines: number; checkoutUrl: string | null } | null>(null)
+  /**
+   * goodsTotal фіксується В МОМЕНТ підтвердження. Живий selectedTotal тут не
+   * годиться: тап по рівню під карткою успіху заднім числом міняв арифметику
+   * вже доданого кошика.
+   */
+  const [added, setAdded] = useState<{
+    total: number
+    lines: number
+    checkoutUrl: string | null
+    goodsTotal: number
+  } | null>(null)
   const [showTrace, setShowTrace] = useState(false)
 
   const plan = useMutation({
@@ -122,7 +132,12 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
       })
     },
     onSuccess: (res) => {
-      setAdded({ total: res.cart.total, lines: res.cart.lines.length, checkoutUrl: res.cart.checkoutUrl })
+      setAdded({
+        total: res.cart.total,
+        lines: res.cart.lines.length,
+        checkoutUrl: res.cart.checkoutUrl,
+        goodsTotal: selectedTotalRef.current,
+      })
       setConfirming(false)
     },
   })
@@ -160,6 +175,9 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
   }) : false
 
   const selectedTotal = effective.reduce((sum, o) => sum + (o?.lineTotal ?? 0), 0)
+  /** для onSuccess мутації: колбек не бачить свіжого selectedTotal через замикання */
+  const selectedTotalRef = useRef(selectedTotal)
+  selectedTotalRef.current = selectedTotal
   const selectedConsumed = effective.reduce((sum, o) => sum + (o?.consumedValue ?? o?.lineTotal ?? 0), 0)
   const selectedLeftover = Math.max(0, selectedTotal - selectedConsumed)
   const servingsCount = data?.servings ?? 1
@@ -178,7 +196,13 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
   const cheapestTotal = data?.totalsByTier.budget ?? 0
   /** той самий поріг, що й на сервері: різниця до 20 грн — нічия */
   const verdict: 'cook' | 'ready' | 'tie' =
-    readyTotal === null ? 'cook' : Math.abs(readyTotal - selectedConsumed) < 2000 ? 'tie' : readyTotal > selectedConsumed ? 'cook' : 'ready'
+    readyTotal === null
+      ? 'cook'
+      : Math.abs(readyTotal - selectedConsumed) < COOK_VS_READY_TIE_KOPIYKY
+        ? 'tie'
+        : readyTotal > selectedConsumed
+          ? 'cook'
+          : 'ready'
 
   return (
     <div className="space-y-4">
@@ -291,6 +315,7 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                     <div className="space-y-2">
                       {c.tiers.map((t) => {
                         const safety = c.safety.find((s) => s.productId === t.product.productId)
+                        const per100 = pricePerHundred(t.product)
                         const active = activeId === t.product.productId
                         return (
                           <button
@@ -322,9 +347,9 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                                   Без неї «Преміальний 159 грн» поруч з «Оптимальний 279 грн»
                                   читається як помилка розрахунку, хоча різні лише фасовки.
                                 */}
-                                {pricePerHundred(t.product) !== null && (
+                                {per100 !== null && (
                                   <div className="text-[11px] font-medium text-graphite-700">
-                                    {formatUah(pricePerHundred(t.product)!)} за 100{' '}
+                                    {formatUah(per100)} за 100{' '}
                                     {t.product.unit === 'мл' || t.product.unit === 'л' ? 'мл' : 'г'}
                                   </div>
                                 )}
@@ -419,9 +444,9 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
             <p className="mt-3 text-[13px] leading-snug text-graphite-700">
               {/* Серверне пояснення описує рівень, а не поточний вибір: щойно
                   користувач змінив товар, воно говорить про інші суми */}
-              {mixed && readyTotal !== null
+              {selectedConsumed !== data.cookVsReady.comparison.cook.consumedCost && readyTotal !== null
                 ? verdict === 'cook'
-                  ? `З вашим вибором приготувати вдома дешевше на ${formatUah(readyTotal - selectedConsumed)} (${formatUah(cookPerServing)} проти ${formatUah(data.cookVsReady.comparison.ready!.costPerServing)} за порцію), але займе ${data.cookVsReady.comparison.cook.minutes} хв.`
+                  ? `З вашим вибором приготувати вдома дешевше на ${formatUah(readyTotal! - selectedConsumed)} (${formatUah(cookPerServing)} проти ${formatUah(data.cookVsReady.comparison.ready!.costPerServing)} за порцію), але займе ${data.cookVsReady.comparison.cook.minutes} хв.`
                   : verdict === 'ready'
                     ? `З вашим вибором готове дешевше на ${formatUah(selectedConsumed - readyTotal)} і економить ${data.cookVsReady.comparison.cook.minutes} хв.`
                     : `З вашим вибором різниця в ціні незначна (${formatUah(Math.abs(readyTotal - selectedConsumed))}). Питання лише в часі.`
@@ -449,11 +474,16 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
               <p className="mt-1 text-[13px] text-graphite-700">
                 У кошику {added.lines}{' '}
                 {pluralize(added.lines, 'позиція', 'позиції', 'позицій')} на {formatUah(added.total)}.
-                {added.total > selectedTotal && (
+                {/*
+                  Різниця між підсумком кошика і доданими товарами — це НЕ лише
+                  доставка: там і те, що лежало в кошику раніше. Видавати її за
+                  доставку означало брехати в найчутливішому місці — про гроші.
+                */}
+                {added.total > added.goodsTotal && (
                   <>
                     {' '}
-                    Це {formatUah(selectedTotal)} за товари плюс{' '}
-                    {formatUah(added.total - selectedTotal)} доставки.
+                    З них {formatUah(added.goodsTotal)} — щойно додані товари, решта —
+                    доставка й те, що вже було в кошику.
                   </>
                 )}
               </p>

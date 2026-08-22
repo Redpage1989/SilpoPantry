@@ -89,6 +89,17 @@ export interface SilpoCartLine {
   quantity: number
   price: Kopiyky
   promoPrice?: Kopiyky
+  /**
+   * Ідентифікатори offer'а. Без них змінити кількість неможливо:
+   * запис у кошик вимагає companyId+branchId для КОЖНОГО товару, а в
+   * кошику з кількох відправлень філія в кожного рядка своя.
+   */
+  companyId?: string
+  branchId?: string
+  /** ваговий товар: quantity в кілограмах, крок — step */
+  weighted?: boolean
+  /** крок ваги в кілограмах (addToBasketStep) */
+  step?: number
 }
 
 export interface SilpoCart {
@@ -160,8 +171,16 @@ export interface SilpoAdapter {
    * WRITE. Задає ТОЧНУ кількість товару в кошику, а не додає до наявної.
    * Потрібне для кнопок «−/+» у кошику: без цього змінити кількість
    * помилково доданого товару можна було лише видаливши його й додавши знову.
+   *
+   * `source` — ідентифікатори offer'а з рядка кошика. Контекст доставки тут
+   * не годиться: його companyId буває відсутній, а філія рядка в
+   * мультивідправленні відрізняється від філії контексту.
    */
-  setCartQuantity(productId: string, quantity: number): Promise<SilpoCart>
+  setCartQuantity(
+    productId: string,
+    quantity: number,
+    source?: { companyId?: string; branchId?: string },
+  ): Promise<SilpoCart>
   /** Витягує й очищає накопичений трейс. */
   drainTrace(): McpTraceEntry[]
 }

@@ -241,11 +241,21 @@ export class MockSilpoAdapter implements SilpoAdapter {
     return cart
   }
 
-  async setCartQuantity(productId: string, quantity: number): Promise<SilpoCart> {
+  async setCartQuantity(
+    productId: string,
+    quantity: number,
+    _source?: { companyId?: string; branchId?: string },
+  ): Promise<SilpoCart> {
     if (quantity <= 0) return this.removeFromCart([productId])
     const lines = await this.readCart()
     const line = lines.find((l) => l.productId === productId)
-    if (line) line.quantity = quantity
+    /**
+     * Live-режим у цій ситуації upsert-ить товар; мовчазний no-op ховав би
+     * розбіжність. Помилка чесніша: якщо товару немає в кошику — значить,
+     * кошик уже не той, який бачить користувач.
+     */
+    if (!line) throw new Error('Товару вже немає в кошику — оновіть сторінку')
+    line.quantity = quantity
     await this.writeCart(lines)
     const cart = this.buildCart(lines)
     this.record('silpo_add_or_update_cart_products', { productId, quantity }, { lines: cart.lines.length })

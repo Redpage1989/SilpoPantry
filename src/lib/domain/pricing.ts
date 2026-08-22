@@ -198,9 +198,15 @@ export function buildTiers(options: ProductOption[], missing: MissingIngredient)
        * перевіряє: преміальним стає найдорожчий ЗА 100 г. Стверджувати те,
        * чого не вимірюєш, — найдешевший спосіб втратити довіру до решти цифр.
        */
-      rationale: !comparable
-        ? 'Найвища підсумкова ціна серед знайдених'
-        : 'Найвища ціна за 100 г/мл — зазвичай це бренд або менша фасовка',
+      /**
+       * Той самий захист, що й у бюджетного: коли ваги немає (уп) або виміри
+       * змішані, «ціна за 100 г» — метрика, якої не існує й яку немає чим
+       * підтвердити на екрані.
+       */
+      rationale:
+        !comparable || priciest.unit === 'уп'
+          ? 'Найвища підсумкова ціна серед знайдених'
+          : 'Найвища ціна за 100 г/мл — зазвичай це бренд або менша фасовка',
     },
   ]
 
@@ -301,6 +307,15 @@ export interface CookVsReadyResult {
 }
 
 /**
+ * Поріг нічиєї в порівнянні «готувати vs купити», у копійках.
+ *
+ * Раніше число 2000 жило літералом і тут, і в DishPlanner, який перераховує
+ * вердикт на льоту після зміни товару. Два літерали розійшлися б мовчки:
+ * сервер казав би «нічия», а клієнт підсвічував переможця.
+ */
+export const COOK_VS_READY_TIE_KOPIYKY: Kopiyky = 2000
+
+/**
  * Порівняння «приготувати вдома» vs «купити готове».
  *
  * Важлива чесність: при готуванні вдома ми рахуємо ГРОШІ, які треба витратити
@@ -373,7 +388,7 @@ export function compareCookVsReady(params: {
   const diff = readyTotal - consumedCost
   const minutesSaved = cookMinutes - readyMinutes
   const recommendation: CookVsReadyResult['recommendation'] =
-    Math.abs(diff) < 2000 ? 'tie' : diff > 0 ? 'cook' : 'ready'
+    Math.abs(diff) < COOK_VS_READY_TIE_KOPIYKY ? 'tie' : diff > 0 ? 'cook' : 'ready'
 
   const leftoverNote =
     cook.leftoverValue > 0

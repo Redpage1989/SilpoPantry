@@ -6,7 +6,7 @@ import { Badge, Button, Card, LinkButton, SectionTitle } from '@/components/ui'
 import { apiGet, apiPost, ApiError } from '@/lib/client'
 import { DIFFICULTY_LABELS, MEAL_LABELS, type Difficulty, type MealType } from '@/lib/domain/types'
 import { pluralize } from '@/lib/domain/scoring'
-import { MIN_VOTES_FOR_WINNER, weekLabel } from '@/lib/domain/user-recipes'
+import { MIN_VOTES_FOR_WINNER } from '@/lib/domain/user-recipes'
 
 interface CommunityRecipe {
   id: string
@@ -30,6 +30,7 @@ interface CommunityRecipe {
 
 interface WeeklyAward {
   isoWeek: string
+  weekLabelText: string
   title: string
   slug: string
   imageEmoji: string
@@ -43,6 +44,7 @@ interface WeeklyAward {
 
 interface FeedResponse {
   isoWeek: string
+  weekLabelText: string
   winner: { recipeId: string | null; votes: number; enoughVotes: boolean }
   prize: { balabonuses: number; awardedBy: string; confirmed: boolean }
   awards: WeeklyAward[]
@@ -90,7 +92,7 @@ export function CommunityFeed() {
           <Card className={winner ? 'border border-accent-300' : undefined}>
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-[15px] font-semibold">🏆 Рецепт тижня</h2>
-              <span className="text-[11px] text-graphite-300">{weekLabel(data.isoWeek, new Date())}</span>
+              <span className="text-[11px] text-graphite-300">{data.weekLabelText}</span>
             </div>
             {winner ? (
               <div className="mt-2 flex gap-3">
@@ -151,7 +153,7 @@ export function CommunityFeed() {
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[14px] font-medium leading-tight">{a.title}</div>
                         <div className="text-[11px] text-graphite-500">
-                          {weekLabel(a.isoWeek, new Date())} · {a.author} · {a.votes}{' '}
+                          {a.weekLabelText} · {a.author} · {a.votes}{' '}
                           {pluralize(a.votes, 'голос', 'голоси', 'голосів')}
                         </div>
                         <div className="mt-0.5 text-[11px] text-graphite-500">

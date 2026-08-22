@@ -7,6 +7,7 @@ import type {
   Kopiyky,
 } from './types'
 import { areUnitsCompatible, toBase, convert } from './units'
+import { normalizeProductName } from './normalize'
 import { daysUntil, SOON_DAYS } from './pantry'
 
 /** Орієнтовна ціна одиниці, коли рецепт її не задав (копійки за г/мл/шт). */
@@ -155,4 +156,99 @@ function round2(n: number): number {
 
 function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n))
+}
+
+/**
+ * Форми, які означають ІНШИЙ продукт, а не інгредієнт.
+ *
+ * Слово відсіює товар лише тоді, коли самого інгредієнта воно не стосується:
+ * для «шоколад» товар із «шоколадний» цілком доречний, для «яйця» — ні.
+ */
+const NOT_AN_INGREDIENT = [
+  'шоколад',
+  'цукерк',
+  'батончик',
+  'драже',
+  'морозиво',
+  'лікер',
+  'напій',
+  'плитка',
+  'сироп',
+]
+
+/**
+ * Входження з межами слова, безпечне для кирилиці.
+ *
+ * `\b` у JS-регулярках працює лише з ASCII і НІКОЛИ не збігається перед
+ * кирилицею — ця пастка вже тричі кусала цей репозиторій. Тому межі
+ * перевіряються вручну: символи навколо збігу не мають бути літерами.
+ * Без цього bare-ключ «сир» із рецепта спільноти матчив «Сирок глазурований».
+ */
+const CYR_LETTER = /[а-щьюяїієґa-z0-9]/i
+export function includesWord(haystack: string, needle: string): boolean {
+  let from = 0
+  while (true) {
+    const i = haystack.indexOf(needle, from)
+    if (i === -1) return false
+    const before = i === 0 ? '' : haystack[i - 1]
+    const after = i + needle.length >= haystack.length ? '' : haystack[i + needle.length]
+    if (!CYR_LETTER.test(before) && !CYR_LETTER.test(after)) return true
+    from = i + 1
+  }
+}
+
+/**
+ * Чи схожий товар на сам інгредієнт, а не на солодощі з його назвою.
+ *
+ * Усі приклади в логіці — з живих прогонів, не вигадані:
+ *   «Яйця» → «Молоко пастеризоване» (чорний список не ловить — потрібна
+ *   позитивна перевірка), «Маскарпоне» → «Тістечко Макарон» (пошук «Сільпо»
+ *   знаходить за схожістю), «Сир твердий» → «Сир Гауда» (ключ товару «сир»
+ *   не дорівнює багатослівному ключу інгредієнта, але Є одним із його слів).
+ */
+export function isPlausibleIngredientMatch(productName: string, ingredientName: string): boolean {
+  const name = productName.toLowerCase()
+  const ingredient = ingredientName.toLowerCase()
+
+  // «зі смаком X» — ароматизований продукт, а не сам X
+  if (name.includes('смак') && !ingredient.includes('смак')) return false
+  if (NOT_AN_INGREDIENT.some((w) => name.includes(w) && !ingredient.includes(w))) return false
+
+  const key = normalizeProductName(ingredientName)
+  if (key.length === 0) return true
+
+  const prodKey = normalizeProductName(productName)
+  if (prodKey === key) return true
+
+  /**
+   * Багатослівний ключ інгредієнта: товар доречний, коли його власний ключ —
+   * одне зі слів ключа. «Сир Гауда» (ключ «сир») для «сир твердий».
+   * Рівність цілим словом, не підрядком: «сирок» ∉ {«сир», «твердий»}.
+   *
+   * Асиметрія навмисна. Збіг із ПЕРШИМ словом достатній сам по собі: перше
+   * слово — це тип продукту («сир …»). Збіг із дальшим словом вимагає ще й
+   * сліду першого слова в назві, інакше «Філе лосося» проходило б для
+   * «куряче філе» — філе, але не те. Слід шукається за основою слова
+   * («куряче» → «куря» знаходить і «курячої»), бо закінчення в кирилиці
+   * змінюються за відмінками.
+   */
+  if (key.includes(' ')) {
+    const words = key.split(' ')
+    if (words[0] === prodKey) return true
+    if (words.includes(prodKey)) {
+      const stem = words[0].slice(0, Math.max(4, words[0].length - 2))
+      if (name.includes(stem)) return true
+    }
+  }
+  return includesWord(name, key)
+}
+
+export function isPlausibleReadyMeal(productName: string, dishTitle: string): boolean {
+  const name = productName.toLowerCase()
+  const dish = dishTitle.toLowerCase()
+  if (!name.includes(dish.split(' ')[0])) return false
+  // «зі смаком X» — це ароматизований продукт, а не сама страва
+  if (name.includes('смак')) return false
+  const NOT_A_DISH = ['шоколад', 'морозиво', 'напій', 'сироп', 'кава', 'йогурт', 'печиво', 'батончик', 'цукерк']
+  return !NOT_A_DISH.some((w) => name.includes(w))
 }

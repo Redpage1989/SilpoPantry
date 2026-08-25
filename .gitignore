@@ -29,3 +29,8 @@ coverage/
 
 .DS_Store
 prisma/recipes.json
+
+# Граф коду graphify — регенерується через `graphify update .`
+graphify-out/
+# Робочі копії агентів
+.claude/worktrees/

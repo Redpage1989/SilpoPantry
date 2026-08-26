@@ -25,7 +25,8 @@
     "mcp:cart": "tsx scripts/live-cart-read.ts",
     "mcp:cart-write": "tsx scripts/live-cart-write.ts",
     "export:recipes": "tsx scripts/export-recipes.ts",
-    "mcp:dish": "tsx scripts/live-tiramisu.ts"
+    "mcp:dish": "tsx scripts/live-tiramisu.ts",
+    "tutorial:record": "tsx scripts/record-tutorial.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

@@ -34,3 +34,6 @@ prisma/recipes.json
 graphify-out/
 # Робочі копії агентів
 .claude/worktrees/
+
+# відео-туторіал: важкий артефакт, генерується скриптом
+tutorial-out/

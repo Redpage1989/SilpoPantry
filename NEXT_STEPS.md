@@ -112,7 +112,7 @@ npm run dev
 
 ```bash
 cd ~/Developer/SilpoPantry
-npm run verify         # typecheck + lint + 180 unit-тестів
+npm run verify         # typecheck + lint + 236 unit-тестів
 npm run test:e2e       # 8 наскрізних сценаріїв
 curl -s -o /dev/null -w "%{http_code}\n" https://komora.im.pl.ua/login   # має бути 200
 ```

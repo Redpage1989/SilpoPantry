@@ -21,7 +21,13 @@ SLIDES = Path("tutorial-out/slides")
 OUT = Path("tutorial-out/pitch-final.mp4")
 INTRO = ["in1", "in2", "in3"]
 OUTRO = ["out1", "out2", "out3", "out4", "out5"]
-PAD = 0.6  # пауза після останнього слова, щоб слайд не зникав різко
+PAD = 0.35  # пауза після останнього слова, щоб слайд не зникав різко
+
+# Демо обрізається на 218,9 с (мова в ньому закінчується о 218,0). Далі йшли
+# 3,7 с фінального титру — тепер зайвих: одразу за демо йдуть слайди фіналу,
+# і другий «кінець» посеред відео збивав би ритм. Заразом це тримає загальну
+# тривалість під вимогою журі в 5 хвилин, куди повна версія не влазила.
+DEMO_END = 218.9
 
 
 def dur(p: Path) -> float:
@@ -105,13 +111,13 @@ def main() -> int:
             print(f"  {n}  {sec:5.1f} с  {p_in[i][:44]}…")
 
         mid = tmp / "demo.mp4"
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(DEMO),
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(DEMO), "-t", str(DEMO_END),
                         "-c:v", "libx264", "-crf", "20", "-preset", "medium",
                         "-pix_fmt", "yuv420p", "-r", "25",
                         "-c:a", "aac", "-b:a", "112k", "-ar", "48000", "-ac", "1",
                         "-video_track_timescale", "12800", str(mid)], check=True)
         parts.append(mid)
-        print(f"  demo {dur(DEMO):5.1f} с")
+        print(f"  demo {dur(mid):5.1f} с  (з {dur(DEMO):.1f}, хвіст титру обрізано)")
 
         pos = 0.0
         for i, (n, d) in enumerate(zip(OUTRO, d_out)):

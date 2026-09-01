@@ -1,5 +1,11 @@
 # «Сільпо: Сімейна комора» — прототип хакатону.
 # Слухає ЛИШЕ 127.0.0.1: назовні застосунок публікує Cloudflare Tunnel.
+#
+# `name` ОБОВʼЯЗКОВИЙ: без нього compose бере імʼя проєкту з назви теки
+# (`deploy`), а таких тек на сервері кілька — 26.08.2026 up сусіднього
+# MetroPantry мовчки зніс цей контейнер, бо для compose обидва були
+# «одним проєктом deploy» з одним сервісом app.
+name: silpo-pantry
 
 services:
   app:
@@ -40,4 +46,15 @@ services:
         max-file: "3"
 
 volumes:
+  # Дані створені, коли проєкт ще звався `deploy` (див. `name` вгорі), тому
+  # справжнє імʼя volume — deploy_silpo-pantry-data. Фіксуємо його явно, щоб
+  # зміна імені проєкту не відвʼязала наявну БД. external: compose цей volume
+  # не створює й не видаляє (не зачепить навіть `down -v`); на новому сервері
+  # спершу `docker volume create deploy_silpo-pantry-data`.
+  #
+  # Перший up після цієї зміни: старий контейнер ще належить проєктові
+  # `deploy` і тримає імʼя silpo-pantry, тому одноразово перед ним —
+  #   docker compose -p deploy down   # саме БЕЗ -v, бо -v видалить БД
   silpo-pantry-data:
+    external: true
+    name: deploy_silpo-pantry-data

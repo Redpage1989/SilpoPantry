@@ -45,24 +45,48 @@ def duration(path: Path) -> float:
     return float(out)
 
 
-def detect_speech(audio: Path, total: float, thresh="-45dB", min_sil=0.45):
-    """Межі реплік: усе, що між достатньо довгими проміжками тиші."""
+def align_by_text(audio: Path, total: float, paragraphs: list[str]):
+    """
+    Межі реплік за текстом, підтягнуті до реальних пауз.
+
+    Пошук самою лише тишею тут не працює: ElevenLabs не робить паузи між
+    абзацами довшими за паузи між реченнями — заміряний розподіл суцільний,
+    від 0,15 до 0,59 с без розриву. Тому межі спершу передбачаються за
+    часткою символів абзацу (темп мовлення рівний), а потім кожна
+    підтягується до найближчої справжньої паузи. Дрейф темпу так
+    самовиправляється на кожній межі.
+    """
     log = run(["ffmpeg", "-v", "info", "-i", str(audio),
-               "-af", f"silencedetect=noise={thresh}:d={min_sil}",
-               "-f", "null", "-"])
+               "-af", "silencedetect=noise=-45dB:d=0.15", "-f", "null", "-"])
     starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", log)]
     ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", log)]
-    # Мова починається на 0 або після першої тиші, і триває до наступної.
-    bounds, cur = [], 0.0
-    if ends and (not starts or ends[0] < starts[0]):
-        cur = ends[0]
-    for i, s in enumerate(starts):
-        if s > cur + 0.15:
-            bounds.append((cur, s))
-        cur = ends[i] if i < len(ends) else s
-    if total - cur > 0.15:
-        bounds.append((cur, total))
-    return bounds
+    gaps = sorted((a, b) for a, b in zip(starts, ends) if b > a)
+    if not gaps:
+        return None, "у доріжці немає пауз — нічим різати"
+
+    lens = [len(x) for x in paragraphs]
+    cum, acc = [], 0
+    for n in lens[:-1]:
+        acc += n
+        cum.append(acc / sum(lens) * total)
+
+    chosen, prev, drifts = [], 0.0, []
+    for want in cum:
+        cand = [g for g in gaps if g[0] > prev + 0.4]
+        if not cand:
+            return None, f"забракло пауз близько {want:.1f} с"
+        best = min(cand, key=lambda g: abs((g[0] + g[1]) / 2 - want))
+        mid = (best[0] + best[1]) / 2
+        drifts.append(abs(mid - want))
+        chosen.append(mid)
+        prev = mid
+
+    bounds, start = [], 0.0
+    for c in chosen:
+        bounds.append((start, c))
+        start = c
+    bounds.append((start, total))
+    return bounds, max(drifts)
 
 
 def main() -> int:
@@ -81,17 +105,17 @@ def main() -> int:
     vdur, adur = duration(VIDEO), duration(audio)
     print(f"відео: {vdur:.1f} с · доріжка: {adur:.1f} с")
 
-    segs = detect_speech(audio, adur)
-    print(f"знайдено реплік: {len(segs)} (сцен: {len(SCENES)})")
-    if len(segs) != len(SCENES):
-        print("\n⚠ Кількість реплік не збіглася зі сценами.")
-        print("  Причина зазвичай одна: ElevenLabs злив два абзаци без паузи")
-        print("  або, навпаки, зробив паузу всередині речення.")
-        print("  Межі, які знайшлися:")
-        for i, (a, b) in enumerate(segs):
-            print(f"    {i + 1:2}. {a:6.1f} → {b:6.1f}  ({b - a:.1f} с)")
-        print("\n  Скажіть Клоду — підправлю поріг або розкладу вручну.")
+    text = Path("docs/elevenlabs-text.txt").read_text(encoding="utf-8")
+    paragraphs = [x.strip() for x in text.split("\n\n") if x.strip()]
+    if len(paragraphs) != len(SCENES):
+        print(f"У тексті {len(paragraphs)} абзаців, а сцен {len(SCENES)} — вони мусять збігатися.")
         return 2
+
+    segs, info = align_by_text(audio, adur, paragraphs)
+    if segs is None:
+        print(f"Не вдалося розкласти: {info}")
+        return 2
+    print(f"межі за текстом · найбільший відхил від паузи: {info:.2f} с\n")
 
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)

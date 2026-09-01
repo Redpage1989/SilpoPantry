@@ -41,3 +41,4 @@ tutorial-out/
 # інструкції для Claude Code — робочі файли, не частина подачі
 .claude/
 CLAUDE.md
+tutorial-out/slides/

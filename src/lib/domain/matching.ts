@@ -7,7 +7,7 @@ import type {
   Kopiyky,
 } from './types'
 import { areUnitsCompatible, toBase, convert } from './units'
-import { normalizeProductName } from './normalize'
+import { normalizeProductName, transliterateLatinFoodTerms } from './normalize'
 import { daysUntil, SOON_DAYS } from './pantry'
 
 /** Орієнтовна ціна одиниці, коли рецепт її не задав (копійки за г/мл/шт). */
@@ -207,7 +207,9 @@ export function includesWord(haystack: string, needle: string): boolean {
  *   не дорівнює багатослівному ключу інгредієнта, але Є одним із його слів).
  */
 export function isPlausibleIngredientMatch(productName: string, ingredientName: string): boolean {
-  const name = productName.toLowerCase()
+  // латиниця з етикетки → кирилиця, інакше кириличний ключ «маскарпоне»
+  // не знаходився в назві «Сир Mascarpone Galbani» і товар випадав з рівнів
+  const name = transliterateLatinFoodTerms(productName.toLowerCase())
   const ingredient = ingredientName.toLowerCase()
 
   // «зі смаком X» — ароматизований продукт, а не сам X

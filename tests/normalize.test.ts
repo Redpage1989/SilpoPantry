@@ -41,6 +41,34 @@ describe('normalizeProductName', () => {
   })
 })
 
+/**
+ * Латиниця з етикеток імпортних товарів. Живі позиції каталогу:
+ * «Сир Mascarpone Galbani», «Печиво Savoiardi Vicenzi», «Savoiardi Bonomi,
+ * ящик 6 × 400 г». Без транслітерації такий товар отримував ключ «сир»,
+ * «печиво» чи «savoiardi» — і випадав із матчингу за кириличним ключем.
+ */
+describe('латинські терміни з етикеток зводяться до кириличного ключа', () => {
+  it('латинський термін у назві дає той самий ключ, що кириличний', () => {
+    expect(normalizeProductName('Сир Mascarpone Galbani, 250 г')).toBe('маскарпоне')
+    expect(normalizeProductName('Печиво Savoiardi Vicenzi, 200 г')).toBe('савоярді')
+    expect(normalizeProductName('Savoiardi Bonomi, ящик 6 × 400 г')).toBe('савоярді')
+    expect(normalizeProductName('Mozzarella Galbani у розсолі')).toBe('моцарела')
+    expect(normalizeProductName('Parmigiano Reggiano витриманий')).toBe('пармезан')
+    expect(normalizeProductName('Ricotta Dolce')).toBe('рикота')
+  })
+
+  it('транслітерований термін іде далі конвеєром синонімів, а не підміняє його', () => {
+    // spaghetti → спагеті → макарони: словник дає кирилицю, канонізує конвеєр
+    expect(normalizeProductName('Spaghetti Barilla')).toBe('макарони')
+    expect(normalizeProductName('Cocoa Powder')).toBe('какао')
+  })
+
+  it('латинський бренд без харчового терміна ключем не стає', () => {
+    expect(normalizeProductName('Kinder Surprise яйце')).not.toBe('яйця')
+    expect(normalizeProductName('Galbani')).toBe('galbani')
+  })
+})
+
 describe('isSameIngredient', () => {
   it('визнає збіг через список замін', () => {
     expect(isSameIngredient('вершки', 'сметана', ['сметана'])).toBe(true)

@@ -611,6 +611,33 @@ describe('фільтр: багатослівні ключі й межі слов
   })
 })
 
+/**
+ * Латиниця на етикетках імпортних товарів. Живі позиції каталогу:
+ * «Сир Mascarpone Galbani», «Печиво Savoiardi Vicenzi», «Savoiardi Bonomi,
+ * ящик 6 × 400 г» — фільтр відсіював їх, бо кириличний ключ «маскарпоне»/
+ * «савоярді» не знаходився в латинській назві. Для савоярді лишався один
+ * товар — і цінові рівні не будувались зовсім.
+ */
+describe('латинська назва товару матчиться кириличному ключу', () => {
+  it('латинський бренд-варіант проходить фільтр релевантності', () => {
+    expect(isPlausibleIngredientMatch('Сир Mascarpone Galbani, 250 г', 'Маскарпоне')).toBe(true)
+    expect(isPlausibleIngredientMatch('Печиво Savoiardi Vicenzi, 200 г', 'Печиво савоярді')).toBe(true)
+    expect(isPlausibleIngredientMatch('Savoiardi Bonomi, ящик 6 × 400 г', 'Савоярді')).toBe(true)
+  })
+
+  it('латинський термін усередині назви теж видно кириличному ключу', () => {
+    expect(isPlausibleIngredientMatch('Сир Mozzarella Galbani у розсолі', 'Моцарела')).toBe(true)
+    expect(isPlausibleIngredientMatch('Сир твердий Parmesan витриманий', 'Пармезан')).toBe(true)
+    expect(isPlausibleIngredientMatch('Сир Ricotta Dolce, 250 г', 'Рикота')).toBe(true)
+  })
+
+  it('транслітерація не розхитує консервативний фільтр', () => {
+    // «шоколадне яйце замість яєць» лишається відсіяним — латиниця не виняток
+    expect(isPlausibleIngredientMatch('Kinder Surprise яйце', 'Яйця')).toBe(false)
+    expect(isPlausibleIngredientMatch('Морозиво Mascarpone premium', 'Маскарпоне')).toBe(false)
+  })
+})
+
 describe('rationale преміального не обіцяє метрики, якої немає', () => {
   it('для товарів без ваги — підсумкова ціна, а не «за 100 г»', () => {
     const need = missing({ name: 'Сир', normalizedName: 'сир', needed: 200, have: 0, missing: 200, unit: 'г' })

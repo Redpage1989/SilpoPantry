@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation'
 import { getUserId } from '@/lib/session'
 import { runCartOverview } from '@/lib/agent/orchestrator'
-import { Badge, Card, LinkButton, ModeBadge, SectionTitle } from '@/components/ui'
+import { Badge, Card, InfoNote, LinkButton, ModeBadge, SectionTitle } from '@/components/ui'
 import { formatUah, pluralize } from '@/lib/domain/scoring'
+import { FULFILLMENT_LABELS } from '@/lib/domain/fulfillment'
 import { CartConfirm } from './CartConfirm'
 import { CartLines } from './CartLines'
+import { FulfillmentPicker } from './FulfillmentPicker'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +25,7 @@ export default async function CartPage() {
   } catch (err) {
     return <CartUnavailable message={err instanceof Error ? err.message : 'Невідома помилка'} />
   }
-  const { cart, loyalty, coupons, slots, pendingProposals, promos } = run.data
+  const { cart, loyalty, coupons, slots, pendingProposals, promos, fulfillment } = run.data
   const availableSlots = slots.filter((s) => s.available)
 
   return (
@@ -84,7 +86,18 @@ export default async function CartPage() {
             {cart.discount > 0 && (
               <Row label="Економія за акціями" value={`−${formatUah(cart.discount)}`} tone="success" />
             )}
-            <Row label="Доставка" value={cart.deliveryPrice > 0 ? formatUah(cart.deliveryPrice) : 'безкоштовно'} />
+            <Row
+              label={FULFILLMENT_LABELS[fulfillment].title}
+              value={
+                fulfillment === 'delivery'
+                  ? cart.deliveryPrice > 0
+                    ? formatUah(cart.deliveryPrice)
+                    : 'безкоштовно'
+                  : fulfillment === 'pickup'
+                    ? 'безкоштовно'
+                    : 'оплата на касі'
+              }
+            />
             <div className="mt-2 flex items-baseline justify-between border-t border-cream-200 pt-2">
               <span className="text-[15px] font-semibold">Разом</span>
               <span className="text-[20px] font-bold">{formatUah(cart.total)}</span>
@@ -102,6 +115,22 @@ export default async function CartPage() {
             </Card>
           )}
         </>
+      )}
+
+      {/* Перемикач видно і з порожнім кошиком: спосіб отримання — налаштування,
+          а не властивість конкретного замовлення */}
+      <SectionTitle>Отримання</SectionTitle>
+      <Card className="mb-4">
+        <FulfillmentPicker current={fulfillment} />
+      </Card>
+
+      {fulfillment === 'instore' && cart.lines.length > 0 && (
+        <div className="mb-4">
+          <InfoNote>
+            Список покупок готовий — покажіть його в магазині «Сільпо». Збирання й оформлення не
+            потрібні, оплата на касі.
+          </InfoNote>
+        </div>
       )}
 
       <SectionTitle>Вигода</SectionTitle>
@@ -151,7 +180,8 @@ export default async function CartPage() {
         )}
       </Card>
 
-      {availableSlots.length > 0 && (
+      {/* слоти мають сенс лише для курʼєрської доставки */}
+      {fulfillment === 'delivery' && availableSlots.length > 0 && (
         <>
           <SectionTitle>Доставка</SectionTitle>
           <Card className="mb-4">

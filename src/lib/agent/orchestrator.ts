@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db'
 import { sanitizeForTrace, logEvent } from '@/lib/mcp/pii'
 import { formatUah } from '@/lib/domain/scoring'
 import { effectivePrice } from '@/lib/domain/pricing'
+import { applyFulfillment, normalizeFulfillment } from '@/lib/domain/fulfillment'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
 import type { HouseholdContext, PantryEntry, RecipeLike, Kopiyky, MissingIngredient } from '@/lib/domain/types'
 import type { ScoredRecipe } from '@/lib/domain/scoring'
@@ -472,8 +473,17 @@ export async function runCartOverview(userId: string) {
       orderBy: { createdAt: 'desc' },
       take: 5,
     })
+    /**
+     * Спосіб отримання накладається САМЕ тут — у єдиній точці, з якої
+     * читають підсумки і сторінка /cart, і GET /api/cart. Адаптер віддає
+     * кошик «як від Сільпо», перерахунок під самовивіз/магазин — шар застосунку.
+     */
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { fulfillment: true } })
+    const fulfillment = normalizeFulfillment(user?.fulfillment)
     return {
       ...summary,
+      cart: applyFulfillment(summary.cart, fulfillment),
+      fulfillment,
       promos: promos.map((p) => ({ promoId: p.promoId, title: p.title })),
       pendingProposals: proposals.map((p) => ({
         id: p.id,

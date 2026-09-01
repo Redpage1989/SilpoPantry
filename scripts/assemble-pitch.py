@@ -76,7 +76,7 @@ def seg(name: str, sec: float, audio: Path, start: float, out: Path):
         "-vf", f"scale=780:1688,fps=25,format=yuv420p,"
                f"fade=t=in:st=0:d=0.4,fade=t=out:st={fo:.2f}:d=0.45",
         "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p",
-        "-af", "loudnorm=I=-16:TP=-1.5:LRA=11,apad",
+        "-af", "loudnorm=I=-16:TP=-1.5:LRA=11,alimiter=limit=0.79,apad",
         "-c:a", "aac", "-b:a", "112k", "-ar", "48000", "-ac", "1",
         "-t", f"{sec:.3f}", "-video_track_timescale", "12800", str(out)], check=True)
 
@@ -111,9 +111,12 @@ def main() -> int:
             print(f"  {n}  {sec:5.1f} с  {p_in[i][:44]}…")
 
         mid = tmp / "demo.mp4"
+        # Лімітер і тут: без нього AAC на перекодуванні дає пік вище нуля —
+        # заміряно +0,29 дБ саме на цьому сегменті.
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(DEMO), "-t", str(DEMO_END),
                         "-c:v", "libx264", "-crf", "20", "-preset", "medium",
                         "-pix_fmt", "yuv420p", "-r", "25",
+                        "-af", "alimiter=limit=0.79",
                         "-c:a", "aac", "-b:a", "112k", "-ar", "48000", "-ac", "1",
                         "-video_track_timescale", "12800", str(mid)], check=True)
         parts.append(mid)
@@ -129,8 +132,26 @@ def main() -> int:
 
         lst = tmp / "l.txt"
         lst.write_text("".join(f"file '{p}'\n" for p in parts), encoding="utf-8")
+        raw = tmp / "raw.mp4"
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0",
-                        "-i", str(lst), "-c", "copy", "-movflags", "+faststart",
+                        "-i", str(lst), "-c", "copy", str(raw)], check=True)
+
+        # Пік доводиться міряти й гасити вручну. loudnorm в однопрохідному
+        # режимі не гарантує true peak, а alimiter не рятує: AAC додає
+        # перевищення вже після фільтра. Заміряно +0,36 дБ — тобто зрізання.
+        # Тому міряємо готовий файл і опускаємо рівень рівно на різницю
+        # плюс 2 дБ запасу.
+        log = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(raw),
+                              "-af", "astats=metadata=1", "-f", "null", "-"],
+                             capture_output=True, text=True).stderr
+        peaks = [float(x) for x in re.findall(r"Peak level dB: (-?[\d.]+)", log)]
+        peak = max(peaks) if peaks else 0.0
+        gain = -(peak + 2.0)
+        print(f"\nпік {peak:+.2f} дБ → корекція {gain:+.2f} дБ")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(raw),
+                        "-af", f"volume={gain:.2f}dB",
+                        "-c:v", "copy", "-c:a", "aac", "-b:a", "128k",
+                        "-ar", "48000", "-ac", "1", "-movflags", "+faststart",
                         str(OUT)], check=True)
 
     t = dur(OUT)

@@ -1,4 +1,6 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { WasteButton } from './WasteButton'
 import { getUserId } from '@/lib/session'
 import { loadPantry, loadHouseholdBasics } from '@/lib/agent/tools'
 import { resolveAdapterSafe } from '@/lib/mcp'
@@ -84,6 +86,14 @@ export default async function PantryPage() {
             hint={household.weeklyBudget ? 'задано в налаштуваннях' : 'не заданий'}
           />
         </div>
+        {/* Вхід до метрик саме звідси: комора показує, що лежить зараз,
+            а «Що змінилось» — чи стає від цього краще з тижнями */}
+        <Link
+          href="/metrics"
+          className="mt-3 block text-[12px] text-accent-700 underline underline-offset-2"
+        >
+          Що змінилось за час користування →
+        </Link>
       </Card>
 
       {items.length === 0 && (
@@ -122,6 +132,9 @@ export default async function PantryPage() {
                             {confidenceLabel(item.confidence)}
                           </Badge>
                           {item.needsConfirmation && <Badge tone="info">потребує підтвердження</Badge>}
+                        </div>
+                        <div className="mt-1.5">
+                          <WasteButton id={item.id} name={displayName(item.originalName)} />
                         </div>
                       </div>
                       <div className="shrink-0 text-right">

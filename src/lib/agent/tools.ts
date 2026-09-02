@@ -1040,12 +1040,32 @@ export async function recordCookedMeal(
         if (line.removed) {
           await prisma.pantryItem.update({
             where: { id: line.itemId },
-            data: { quantity: 0, consumedAt: ctx.now },
+            // disposal: продукт пішов у страву, а не в смітник — саме це
+            // розрізнення й дає метриці «спожито вчасно» знаменник
+            data: { quantity: 0, consumedAt: ctx.now, disposal: 'eaten' },
           })
         } else {
           await prisma.pantryItem.update({ where: { id: line.itemId }, data: { quantity: line.remaining } })
         }
       }
+
+      /**
+       * Журнал приготованого. Списання змінює комору, але не лишає сліду про
+       * те, якою вона була до страви, — а метрика «частка страв із наявного»
+       * питає саме про це. `shortfall` тут і є тим, чого не вистачило.
+       */
+      const required = params.recipe.ingredients.filter((i) => !i.optional)
+      await prisma.cookedMeal.create({
+        data: {
+          userId: ctx.userId,
+          recipeSlug: params.recipe.slug,
+          title: params.recipe.title,
+          servings: params.servings,
+          total: required.length,
+          fromPantry: Math.max(0, required.length - shortfall.length),
+          cookedAt: ctx.now,
+        },
+      })
     }
 
     return {

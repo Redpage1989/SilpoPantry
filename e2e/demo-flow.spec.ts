@@ -277,6 +277,47 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
   })
 
   /**
+   * Метрики, які пітч називає вголос. Головне тут — не саме число, а те, що
+   * застосунок мовчить, поки подій замало: «100% страв із наявного» після
+   * однієї вечері журі побачить швидше за будь-кого.
+   */
+  test('13. Метрики мовчать без даних і оживають від подій', async ({ page, context }) => {
+    await startDemo(page)
+    const csrf = (await context.cookies()).find((c) => c.name === 'sp_csrf')?.value
+    const headers = { 'x-csrf-token': csrf as string }
+
+    const metrics = async () => {
+      const res = await (await page.request.get('/api/metrics')).json()
+      return new Map(res.metrics.map((m: { key: string; value: string | null; hint: string }) => [m.key, m]))
+    }
+
+    const before = (await metrics()).get('eatenInTime') as { value: string | null; hint: string }
+    expect(before.value, 'після скидання подій немає — числа теж').toBeNull()
+    expect(before.hint).toMatch(/немає|Замало/)
+
+    // три викинуті позиції — рівно поріг, за яким відсоток стає осмисленим
+    const items = (await (await page.request.get('/api/pantry')).json()).items as { id: string }[]
+    for (const item of items.slice(0, 3)) {
+      const res = await page.request.post('/api/pantry/waste', { headers, data: { id: item.id } })
+      expect(res.ok()).toBeTruthy()
+    }
+
+    const after = (await metrics()).get('eatenInTime') as { value: string | null; hint: string }
+    expect(after.value, 'три події — метрика має заговорити').toBe('0%')
+    expect(after.hint).toContain('3 викинуто')
+
+    // повторна спроба викинути те саме нічого не додає
+    const again = await page.request.post('/api/pantry/waste', { headers, data: { id: items[0].id } })
+    expect(again.ok(), 'позиція вже покинула комору').toBeFalsy()
+
+    // екран існує й показує картки
+    await page.goto('/metrics')
+    await expect(page.getByRole('heading', { name: 'Що змінилось' })).toBeVisible()
+    await expect(page.getByText('Спожито вчасно, не викинуто')).toBeVisible()
+    await expect(page.getByText('Родини, що ведуть комору місяць')).toBeVisible()
+  })
+
+  /**
    * Імпорт чеків має ПОПОВНЮВАТИ комору, а не пропускати наявне, і при
    * цьому не подвоювати при повторному натисканні. Раніше ці дві вимоги
    * конфліктували: від подвоєння рятувало правило «продукт уже є —

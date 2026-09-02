@@ -41,6 +41,7 @@ model User {
   recipeVotes  RecipeVote[]
   weeklyAwards WeeklyAward[]
   recipeReports RecipeReport[]
+  cookedMeals   CookedMeal[]
 
   @@index([silpoProfileId])
 }
@@ -101,6 +102,12 @@ model PantryItem {
   productId      String?
   companyId      String?
   consumedAt     DateTime?
+  /// ЧОМУ позиція покинула комору: "eaten" | "wasted".
+  /// Окреме поле, а не окрема дата: усі наявні фільтри комори звіряються з
+  /// consumedAt, і другий нульовий стовпець довелося б додати в кожен із них.
+  /// Без цього поля метрика «спожито вчасно проти викинутого» не має
+  /// знаменника — комора вміла списати з'їдене й не вміла записати викинуте.
+  disposal       String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -342,6 +349,28 @@ model RecipeVote {
 /// голоси не мають змінювати вже оголошеного переможця. Статус завжди
 /// починається з "pending" — застосунок не нараховує балабонуси сам, у MCP
 /// «Сільпо» немає інструмента запису лояльності (див. weekly-award.ts).
+/// Приготована страва: скільки інгредієнтів знайшлось у коморі, а скільки
+/// довелось докуповувати. Пишеться при «Я це приготував» із застосуванням.
+///
+/// Без цього журналу метрику «частка страв із наявного» не порахувати:
+/// списання змінює комору, але не лишає сліду про те, ЯКОЮ вона була.
+model CookedMeal {
+  id         String   @id @default(cuid())
+  userId     String
+  recipeSlug String
+  title      String
+  servings   Int      @default(2)
+  /// скільки інгредієнтів рецепта покрито коморою
+  fromPantry Int      @default(0)
+  /// скільки інгредієнтів у рецепті всього (без необов'язкових)
+  total      Int      @default(0)
+  cookedAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, cookedAt])
+}
+
 /// Скарга на рецепт спільноти. Одна людина — один голос проти рецепта:
 /// без цієї межі один незадоволений сховав би будь-що з кількох вкладок.
 model RecipeReport {

@@ -5,6 +5,7 @@ import { errorResponse } from '@/lib/api'
 import { logEvent } from '@/lib/mcp/pii'
 import { resetDemoCart } from '@/lib/mcp/mock-adapter'
 import { seedDemoUser, seedRecipes, DEMO_USER_ID } from '@/lib/seed/demo'
+import { seedCommunity } from '@/lib/seed/community'
 
 /**
  * Запуск demo-режиму. Створює (або перевикористовує) демонстраційного
@@ -29,6 +30,16 @@ export async function POST() {
       // свіжа комора дісталась би разом із позиціями від попереднього показу.
       await resetDemoCart(DEMO_USER_ID)
       logEvent('info', 'auth.demo_seeded', {})
+    }
+
+    /**
+     * Стрічка спільноти сіється окремою умовою, а не разом із коморою:
+     * рецепти інших родин переживають скидання комори, і прив'язувати їх
+     * до неї означало б втрачати їх щоразу, коли хтось спорожнив полиці.
+     */
+    if ((await prisma.userRecipe.count()) === 0) {
+      await seedCommunity(prisma)
+      logEvent('info', 'community.seeded', {})
     }
 
     /**

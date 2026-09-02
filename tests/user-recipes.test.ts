@@ -8,6 +8,7 @@ import {
   UserRecipeInputSchema,
   weekLabel,
 } from '@/lib/domain/user-recipes'
+import { COMMUNITY_RECIPES } from '@/lib/seed/community'
 import { checkRecipeAgainstRestrictions } from '@/lib/domain/restrictions'
 import type { RecipeLike, Restriction } from '@/lib/domain/types'
 
@@ -219,5 +220,40 @@ describe('людський підпис тижня', () => {
 
   it('пошкоджений ключ повертає як є, а не вигадує дати', () => {
     expect(weekLabel('казна-що', new Date(2026, 7, 12))).toBe('казна-що')
+  })
+})
+
+describe('стартова стрічка спільноти', () => {
+  /**
+   * Склад кожного рецепта має розпізнаватись повністю. Інакше
+   * `compositionVerified` буде false: рецепт з'явиться у стрічці з
+   * попередженням, а агент не візьме страву в підбір — тобто розділ, який
+   * ми заповнюємо заради першого враження, це враження й зіпсує.
+   */
+  it('усі інгредієнти впізнані нормалізатором', () => {
+    for (const r of COMMUNITY_RECIPES) {
+      const c = checkComposition(r.ingredients)
+      expect(c.unknown, `${r.title}: не впізнано ${c.unknown.join(', ')}`).toEqual([])
+      expect(c.verified).toBe(true)
+    }
+  })
+
+  it('рецепти проходять ту саму схему, що й публікація людиною', () => {
+    for (const r of COMMUNITY_RECIPES) {
+      const parsed = UserRecipeInputSchema.safeParse({ ...r, authorConfirmed: true })
+      expect(parsed.success, `${r.title}: ${parsed.error?.issues.map((i) => i.path.join('.') + ' ' + i.message).join('; ')}`).toBe(true)
+    }
+  })
+
+  it('є рецепт із трьома голосами — інакше переможець тижня не оголошується', () => {
+    const top = Math.max(...COMMUNITY_RECIPES.map((r) => r.votedBy.length))
+    expect(top).toBeGreaterThanOrEqual(MIN_VOTES_FOR_WINNER)
+  })
+
+  it('ніхто не голосує за власний рецепт і голоси не дублюються', () => {
+    for (const r of COMMUNITY_RECIPES) {
+      expect(r.votedBy).not.toContain(r.authorId)
+      expect(new Set(r.votedBy).size).toBe(r.votedBy.length)
+    }
   })
 })

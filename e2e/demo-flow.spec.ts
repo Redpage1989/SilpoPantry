@@ -263,4 +263,43 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
       JSON.stringify({ capturedAt: new Date().toISOString(), summary: summary.slice(0, 4000) }, null, 2),
     )
   })
+
+  /**
+   * Регресія з прода: там `/api/dev/reset` вимкнено (404), і демо-користувач
+   * жив із порожньою коморою — «Комора ще порожня», усі страви по 0 %.
+   * Тест навмисно НЕ використовує startDemo(): той викликає скидання й тим
+   * самим приховує саме ту помилку, яку треба зловити.
+   */
+  test('9. Вхід у демо наповнює порожню комору сам', async ({ page, context }) => {
+    await page.goto('/login')
+    await page.getByRole('button', { name: 'Спробувати в демонстраційному режимі' }).click()
+    await page.waitForURL('**/')
+
+    // Мутуючі маршрути захищені double-submit CSRF, тож заголовок беремо
+    // з тієї самої куки, що й браузерний клієнт (див. lib/client.ts)
+    const csrf = (await context.cookies()).find((c) => c.name === 'sp_csrf')?.value
+    expect(csrf).toBeTruthy()
+    const headers = { 'x-csrf-token': csrf as string }
+
+    // Спустошуємо комору так, як це зробила б людина — через API застосунку
+    const before = await (await page.request.get('/api/pantry')).json()
+    for (const item of before.items) {
+      const res = await page.request.delete('/api/pantry', { headers, data: { id: item.id } })
+      expect(res.ok()).toBeTruthy()
+    }
+    expect((await (await page.request.get('/api/pantry')).json()).items).toHaveLength(0)
+
+    // Повторний вхід має привести комору до seed-стану
+    const restart = await page.request.post('/api/auth/demo')
+    expect(restart.ok()).toBeTruthy()
+
+    const after = await (await page.request.get('/api/pantry')).json()
+    expect(after.items.length).toBeGreaterThan(0)
+    expect(after.items.map((i: { originalName: string }) => i.originalName)).toContain('Шпинат свіжий')
+
+    // Родина теж має бути на місці: без неї «меню під склад родини» — порожні слова
+    await page.goto('/pantry')
+    await expect(page.getByText('Комора порожня')).toHaveCount(0)
+    await expect(page.getByText('на 3 ос.')).toBeVisible()
+  })
 })

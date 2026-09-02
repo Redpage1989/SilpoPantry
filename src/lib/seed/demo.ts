@@ -80,10 +80,21 @@ export async function seedDemoUser(prisma: PrismaClient, userId = DEMO_USER_ID) 
   await prisma.recognitionJob.deleteMany({ where: { userId } })
   await prisma.receiptImport.deleteMany({ where: { userId } })
 
+  /**
+   * Бюджет на трьох, а не на одного. Було 250 грн на тиждень — на родину з
+   * трьох осіб і трьох прийомів їжі це ≈12 грн на людину в день, і справа не
+   * лише в правдоподібності: ліміт витрачається наростаючим підсумком
+   * (див. mealplan.ts), тож він вичерпувався на першій же страві, і решту
+   * тижня планувальник працював у аварійному режимі «мінімальна докупівля».
+   * Демонстрація показувала запасний шлях замість основного.
+   *
+   * 2 000 грн лишають запас над докупівлею тижневого раціону (≈1 100 грн на
+   * поточній коморі), але не роблять ліміт формальністю.
+   */
   const profile = {
     displayName: 'Антон',
     authMode: 'demo',
-    weeklyBudget: 250_00,
+    weeklyBudget: 2_000_00,
     mealsPerDay: 3,
     maxCookMinutes: 40,
     onboardedAt: new Date(),

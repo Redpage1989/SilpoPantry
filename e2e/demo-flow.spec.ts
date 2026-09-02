@@ -123,6 +123,18 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
     await page.waitForURL('**/pantry')
     await expect(page.getByRole('heading', { name: 'Домашня комора' })).toBeVisible()
     await expect(page.getByText('Фото', { exact: true }).first()).toBeVisible()
+
+    /**
+     * Розпізнане не має роздвоювати комору. Фото бачить те саме молоко, що
+     * вже прийшло з чека, і поки скан заводив окремий рядок, пояснення страв
+     * перелічували рядки, а не продукти: «використовує Шпинат і Шпинат і
+     * Шпинат і Шпинат свіжий».
+     */
+    const items = (await (await page.request.get('/api/pantry')).json()).items as { normalizedName: string }[]
+    const twins = items
+      .map((i) => i.normalizedName)
+      .filter((name, _, all) => all.filter((n) => n === name).length > 1)
+    expect(twins, `однакові продукти окремими рядками: ${[...new Set(twins)].join(', ')}`).toHaveLength(0)
   })
 
   test('3. Підбір вечері враховує продукти, що псуються', async ({ page }) => {

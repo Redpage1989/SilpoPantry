@@ -227,3 +227,69 @@ export function confidenceTone(confidence: number): 'success' | 'warn' | 'danger
   if (confidence >= 0.6) return 'warn'
   return 'danger'
 }
+
+/** Джерела, які означають «продукт щойно з'явився вдома», а не «я його бачу». */
+const PURCHASE_SOURCES = ['online_order', 'offline_receipt', 'previous_cart', 'manual']
+
+export interface PantryRowLike {
+  id: string
+  quantity: number
+  unit: Unit
+  expiryDate: Date | null
+}
+
+export interface IncomingPantryItem {
+  quantity: number
+  unit: Unit
+  expiryDate: Date | null
+  source: string
+}
+
+export type PantryWritePlan =
+  | { action: 'create' }
+  | { action: 'merge'; id: string; quantity: number; unit: Unit; expiryDate: Date | null }
+
+/**
+ * Куди записати підтверджену позицію: у новий рядок чи в наявний.
+ *
+ * Без цього комора роздвоювалась. Чеки дають «Молоко 2,5%» 0,7 л, фото
+ * холодильника дає «Молоко» 700 мл — обидва нормалізуються в `молоко`, але
+ * створювались двома рядками. Далі це протікало в тексти: пояснення страви
+ * перелічувало рядки, а не продукти, і виходило «використовує Шпинат і
+ * Шпинат і Шпинат і Шпинат свіжий».
+ *
+ * Правило залежить від джерела, бо це різні твердження про світ:
+ *
+ * - фото — це спостереження ПОТОЧНОГО запасу, тож кількість замінюється.
+ *   Скласти означало б подвоїти те саме молоко, яке видно на полиці;
+ * - покупка (чек, замовлення, ручне додавання) — це поповнення, тож
+ *   кількість додається.
+ *
+ * Несумісні одиниці (200 г сиру проти 1 шт) не зливаються: приховане
+ * «г = шт» зіпсувало б підрахунок нестачі й кошик. Такий випадок лишається
+ * окремим рядком — це чесніше, ніж вигадане число.
+ */
+export function planPantryWrite(existing: PantryRowLike | null, incoming: IncomingPantryItem): PantryWritePlan {
+  if (!existing) return { action: 'create' }
+  const converted = tryConvert(incoming.quantity, incoming.unit, existing.unit)
+  if (converted === null) return { action: 'create' }
+
+  const quantity = PURCHASE_SOURCES.includes(incoming.source)
+    ? Math.round((existing.quantity + converted) * 100) / 100
+    : Math.round(converted * 100) / 100
+
+  /**
+   * Термін придатності: пізніший із двох, але невідомий не стирає відомий.
+   * Фото рідко показує дату на упаковці, і без цієї межі один скан
+   * перетворював «використати до завтра» на «термін невідомий» — тобто
+   * гасив саме той сигнал, заради якого комора й ведеться.
+   */
+  const expiryDate =
+    incoming.expiryDate === null
+      ? existing.expiryDate
+      : existing.expiryDate === null || incoming.expiryDate > existing.expiryDate
+        ? incoming.expiryDate
+        : existing.expiryDate
+
+  return { action: 'merge', id: existing.id, quantity, unit: existing.unit, expiryDate }
+}

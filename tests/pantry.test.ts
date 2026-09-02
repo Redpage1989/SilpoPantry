@@ -7,6 +7,7 @@ import {
   totalAvailable,
   planDeduction,
   estimateDaysOfFood,
+  planPantryWrite,
 } from '@/lib/domain/pantry'
 import { convert, tryConvert, humanize, formatQuantity } from '@/lib/domain/units'
 
@@ -172,5 +173,64 @@ describe('оцінка «на скільки днів вистачить»', () 
 
   it('порожня комора — нуль днів', () => {
     expect(estimateDaysOfFood([], 2, 3)).toBe(0)
+  })
+})
+
+describe('planPantryWrite — комора не роздвоюється', () => {
+  const d = (iso: string) => new Date(`${iso}T12:00:00`)
+
+  it('без наявного рядка створює новий', () => {
+    expect(planPantryWrite(null, { quantity: 700, unit: 'мл', expiryDate: null, source: 'photo' })).toEqual({
+      action: 'create',
+    })
+  })
+
+  it('фото замінює кількість: воно показує запас, а не поповнення', () => {
+    // саме той випадок, що дублював комору: чек дав 0,7 л, фото — 700 мл
+    const plan = planPantryWrite(
+      { id: 'milk', quantity: 0.7, unit: 'л', expiryDate: d('2026-09-06') },
+      { quantity: 700, unit: 'мл', expiryDate: null, source: 'photo' },
+    )
+    expect(plan).toEqual({ action: 'merge', id: 'milk', quantity: 0.7, unit: 'л', expiryDate: d('2026-09-06') })
+  })
+
+  it('покупка додається до наявного', () => {
+    const plan = planPantryWrite(
+      { id: 'milk', quantity: 0.7, unit: 'л', expiryDate: d('2026-09-06') },
+      { quantity: 900, unit: 'мл', expiryDate: d('2026-09-12'), source: 'offline_receipt' },
+    )
+    expect(plan).toMatchObject({ action: 'merge', id: 'milk', quantity: 1.6, unit: 'л' })
+  })
+
+  it('ручне додавання — теж поповнення, а не заміна', () => {
+    const plan = planPantryWrite(
+      { id: 'eggs', quantity: 6, unit: 'шт', expiryDate: null },
+      { quantity: 4, unit: 'шт', expiryDate: null, source: 'manual' },
+    )
+    expect(plan).toMatchObject({ action: 'merge', quantity: 10 })
+  })
+
+  it('несумісні одиниці не зливаються: 200 г сиру і 1 шт — різні рядки', () => {
+    const plan = planPantryWrite(
+      { id: 'cheese', quantity: 200, unit: 'г', expiryDate: null },
+      { quantity: 1, unit: 'шт', expiryDate: null, source: 'photo' },
+    )
+    expect(plan).toEqual({ action: 'create' })
+  })
+
+  it('невідомий термін не стирає відомий', () => {
+    const plan = planPantryWrite(
+      { id: 'spinach', quantity: 150, unit: 'г', expiryDate: d('2026-09-03') },
+      { quantity: 100, unit: 'г', expiryDate: null, source: 'photo' },
+    )
+    expect(plan).toMatchObject({ expiryDate: d('2026-09-03') })
+  })
+
+  it('пізніший термін перемагає', () => {
+    const plan = planPantryWrite(
+      { id: 'milk', quantity: 1, unit: 'л', expiryDate: d('2026-09-03') },
+      { quantity: 1, unit: 'л', expiryDate: d('2026-09-10'), source: 'offline_receipt' },
+    )
+    expect(plan).toMatchObject({ expiryDate: d('2026-09-10') })
   })
 })

@@ -7,7 +7,7 @@ import { inferPantryFromReceipts } from '@/lib/domain/receipts'
 import { calculateMissingIngredients } from '@/lib/domain/matching'
 import { rankRecipes, formatUah } from '@/lib/domain/scoring'
 import { buildTiers, compareCookVsReady, sumBasket, estimateServingsPerPack, cartQuantity } from '@/lib/domain/pricing'
-import { findExpiringProducts, planDeduction, estimateDaysOfFood, expiryStatus } from '@/lib/domain/pantry'
+import { findExpiringProducts, planDeduction, estimateDaysOfFood, expiryStatus, planPantryWrite } from '@/lib/domain/pantry'
 import { checkProductAgainstRestrictions } from '@/lib/domain/restrictions'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
 import { toRecipeLike } from '@/lib/domain/user-recipes'
@@ -309,6 +309,7 @@ export async function updatePantryInventory(
 
     for (const item of input.items) {
       const normalizedName = normalizeProductName(item.originalName)
+      const expiryDate = item.expiryDate ? new Date(item.expiryDate) : null
       const data = {
         userId: ctx.userId,
         normalizedName,
@@ -316,7 +317,7 @@ export async function updatePantryInventory(
         category: item.category,
         quantity: item.quantity,
         unit: item.unit,
-        expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+        expiryDate,
         storageLocation: item.storageLocation,
         source: item.source,
         confidence: item.confidence,
@@ -325,6 +326,46 @@ export async function updatePantryInventory(
       }
       if (item.id) {
         await prisma.pantryItem.update({ where: { id: item.id }, data })
+        updated += 1
+        continue
+      }
+
+      /**
+       * Новий продукт шукаємо серед наявних, перш ніж заводити рядок.
+       * Інакше комора роздвоювалась: чек давав «Молоко 2,5%» 0,7 л, фото —
+       * «Молоко» 700 мл, обидва в `молоко`, але двома рядками. Пошук
+       * найстарішого рядка, а не будь-якого: злиття має бути передбачуваним
+       * при повторних сканах.
+       */
+      const twin = await prisma.pantryItem.findFirst({
+        // той самий фільтр, що й у loadPantry: зливаємось лише з рядком,
+        // який людина бачить у коморі, інакше злиття нічим не пояснити
+        where: { userId: ctx.userId, normalizedName, consumedAt: null, quantity: { gt: 0 } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, quantity: true, unit: true, expiryDate: true },
+      })
+      const plan = planPantryWrite(
+        twin ? { ...twin, unit: twin.unit as Unit } : null,
+        { quantity: item.quantity, unit: item.unit, expiryDate, source: item.source },
+      )
+
+      if (plan.action === 'merge') {
+        /**
+         * Рядок лишає собі назву, категорію й джерело. Нове спостереження
+         * каже, СКІЛЬКИ продукту й ДОКИ він придатний, а не що це за продукт:
+         * фото бачить «Молоко» там, де чек знав «Молоко 2,5%», і затирати
+         * точнішу назву коротшою — це втрата, а не оновлення.
+         */
+        await prisma.pantryItem.update({
+          where: { id: plan.id },
+          data: {
+            quantity: plan.quantity,
+            unit: plan.unit,
+            expiryDate: plan.expiryDate,
+            confidence: item.confidence,
+            needsConfirmation: false,
+          },
+        })
         updated += 1
       } else {
         await prisma.pantryItem.create({ data })

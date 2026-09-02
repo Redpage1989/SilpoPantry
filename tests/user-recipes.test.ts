@@ -31,28 +31,43 @@ describe('перевірка складу користувацького рец�
     expect(res.ingredients.every((i) => i.recognized)).toBe(true)
   })
 
+  /**
+   * Приклад тут довелося замінити: «Арахісова паста» була взірцем
+   * невідомого саме тому, що алергія на арахіс через неї не спрацьовувала.
+   * Тепер вона у словнику — разом з усіма іншими носіями алергенів, — тож
+   * невідомим лишається те, чого в словнику справді немає.
+   */
   it('НЕ вгадує невідомий інгредієнт, а позначає його', () => {
-    // «Арахісова паста» → «арахісова»: алергія на арахіс не спрацює
     const res = checkComposition([
       { name: 'Молоко', quantity: 200, unit: 'мл' },
-      { name: 'Арахісова паста', quantity: 50, unit: 'г' },
+      { name: 'Кіноа', quantity: 50, unit: 'г' },
     ])
     expect(res.verified).toBe(false)
-    expect(res.unknown).toContain('Арахісова паста')
-    const peanut = res.ingredients.find((i) => i.name === 'Арахісова паста')!
-    expect(peanut.recognized).toBe(false)
-    // порожній ключ, а не хибний: краще нічого, ніж «арахісова»
-    expect(peanut.normalizedName).toBe('')
+    expect(res.unknown).toContain('Кіноа')
+    const quinoa = res.ingredients.find((i) => i.name === 'Кіноа')!
+    expect(quinoa.recognized).toBe(false)
+    // порожній ключ, а не хибний: краще нічого, ніж вгадане
+    expect(quinoa.normalizedName).toBe('')
+  })
+
+  it('носії алергенів більше не невідомі', () => {
+    const res = checkComposition([
+      { name: 'Арахісова паста', quantity: 50, unit: 'г' },
+      { name: 'Мигдаль', quantity: 30, unit: 'г' },
+      { name: 'Тофу', quantity: 100, unit: 'г' },
+    ])
+    expect(res.unknown).toEqual([])
+    expect(res.verified).toBe(true)
   })
 
   it('позначає рецепт неперевіреним, якщо хоч один інгредієнт невідомий', () => {
     const res = checkComposition([
       { name: 'Борошно', quantity: 200, unit: 'г' },
-      { name: 'Тофу', quantity: 100, unit: 'г' },
+      { name: 'Кіноа', quantity: 100, unit: 'г' },
       { name: 'Цукор', quantity: 50, unit: 'г' },
     ])
     expect(res.verified).toBe(false)
-    expect(res.unknown).toEqual(['Тофу'])
+    expect(res.unknown).toEqual(['Кіноа'])
   })
 
   it('фіксує відому пастку: кокосове молоко зводиться до коровʼячого', () => {

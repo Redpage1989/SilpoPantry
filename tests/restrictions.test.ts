@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { ALLERGEN_SOURCES, allergensImpliedBy } from '@/lib/domain/restrictions'
+import { canonicalKeys } from '@/lib/domain/normalize'
 import {
   checkRecipeAgainstRestrictions,
   checkProductAgainstRestrictions,
@@ -149,5 +151,26 @@ describe('перевірка товару «Сільпо»', () => {
     expect(res.safe).toBe(true)
     expect(res.unknownComposition).toBe(false)
     expect(res.messages).toHaveLength(0)
+  })
+})
+
+describe('словник знає кожен носій алергену', () => {
+  /**
+   * Сторож, якого бракувало. Модерація виводить алергени з РОЗПІЗНАНОГО
+   * складу: якщо словник не знає «мигдаль», інгредієнт лишається
+   * нерозпізнаним, `allergensImpliedBy` не бачить горіхів — і рецепт
+   * публікується без декларації. Перевірка тримає обидва списки разом.
+   */
+  it('кожен інгредієнт з ALLERGEN_SOURCES є канонічним ключем', () => {
+    const keys = new Set(canonicalKeys())
+    const missing = [...new Set(Object.values(ALLERGEN_SOURCES).flat())].filter((s) => !keys.has(s))
+    expect(missing, `словник не знає: ${missing.join(', ')}`).toEqual([])
+  })
+
+  it('носій алергену справді тягне за собою алерген', () => {
+    expect(allergensImpliedBy(['мигдаль'])).toContain('горіхи')
+    expect(allergensImpliedBy(['креветки'])).toContain('морепродукти')
+    expect(allergensImpliedBy(['тофу'])).toContain('соя')
+    expect(allergensImpliedBy(['манка'])).toContain('глютен')
   })
 })

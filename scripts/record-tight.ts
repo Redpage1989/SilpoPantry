@@ -119,6 +119,34 @@ async function main() {
     recordVideo: { dir: OUT, size: { width: 390, height: 844 } }, locale: 'uk-UA',
   })
   await ctx.addInitScript(OVERLAY)
+
+  /**
+   * Прогрів ПЕРЕД стартом хронометра.
+   *
+   * Кожен маршрут і кожен важкий запит першого разу коштують секунди:
+   * Next добирає чанки, планувальник рахує тиждень, пошук страви вперше
+   * проходить увесь ланцюжок. Ці секунди падали всередину сцен, які через
+   * це перевищували ціль, — а перевищення сцени стає паузою в озвучці,
+   * бо репліка вже скінчилась, а кадр ще тримається. Холодний прогін
+   * давав 193 с проти 178 с на прогрітому: п'ятнадцять секунд тиші
+   * рівно на порожньому місці.
+   *
+   * Прогрів робиться окремим контекстом, щоб куки й стан демо-сесії
+   * запису лишились чистими.
+   */
+  const warm = await browser.newContext({ baseURL: BASE, locale: 'uk-UA' })
+  const wp = await warm.newPage()
+  const warmStarted = Date.now()
+  await wp.goto('/login')
+  await wp.getByRole('button', { name: 'Спробувати в демонстраційному режимі' }).click()
+  await wp.waitForURL('**/')
+  for (const route of ['/pantry', '/scan', '/recipes', '/recipes/community', '/cart', '/trace', '/dish?query=Тірамісу&servings=6']) {
+    await wp.goto(route).catch(() => undefined)
+    await wp.waitForLoadState('networkidle').catch(() => undefined)
+  }
+  await warm.close()
+  console.log(`прогріто маршрутів за ${((Date.now() - warmStarted) / 1000).toFixed(1)} с\n`)
+
   const page = await ctx.newPage()
   t0 = Date.now()
 

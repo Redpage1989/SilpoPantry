@@ -23,6 +23,20 @@ const ALLERGEN_SOURCES: Record<string, string[]> = {
   'мед': ['мед'],
 }
 
+/**
+ * Які алергени випливають зі складу.
+ *
+ * Та сама таблиця, що й у перевірці страв: модерація рецептів спільноти
+ * звіряє з нею заявлений автором список, і розходження двох джерел зробило
+ * б фільтр для родин з алергією непередбачуваним.
+ */
+export function allergensImpliedBy(normalizedNames: string[]): string[] {
+  const present = new Set(normalizedNames)
+  return Object.entries(ALLERGEN_SOURCES)
+    .filter(([, sources]) => sources.some((s) => present.has(s)))
+    .map(([allergen]) => allergen)
+}
+
 /** Дієти → інгредієнти, що їх порушують. */
 const DIET_FORBIDS: Record<string, string[]> = {
   'vegetarian': ['куряче філе', 'фарш', 'свинина', 'яловичина', 'риба', 'лосось', 'ковбаса', 'бекон', 'желатин'],

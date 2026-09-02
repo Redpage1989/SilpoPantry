@@ -8,6 +8,7 @@ import {
   pickWeeklyWinner,
   weekLabel,
 } from '@/lib/domain/user-recipes'
+import { moderateRecipe } from '@/lib/domain/moderation'
 import { logEvent } from '@/lib/mcp/pii'
 import { closeFinishedWeeks } from '@/lib/awards'
 import { prizeBalabonuses, AWARD_STATUS_LABELS, type AwardStatus } from '@/lib/domain/weekly-award'
@@ -23,6 +24,22 @@ export async function POST(request: Request) {
     if (await prisma.userRecipe.findUnique({ where: { slug } })) {
       slug = `${slug}-${Date.now().toString(36).slice(-4)}`
     }
+
+    /**
+     * Автоперевірка ПЕРЕД публікацією. Те, що не пройшло, лишається
+     * чернеткою: видно лише авторові, разом із причиною. Це не «на розгляді
+     * в модератора» — людини-модератора в прототипі немає, і вдавати чергу,
+     * якої ніхто не розбирає, було б гірше за миттєву публікацію.
+     */
+    const verdict = moderateRecipe({
+      title: input.title,
+      summary: input.summary,
+      steps: input.steps,
+      tips: input.tips,
+      ingredients: composition.ingredients,
+      declaredAllergens: input.declaredAllergens,
+      unknownIngredients: composition.unknown,
+    })
 
     const recipe = await prisma.userRecipe.create({
       data: {
@@ -42,28 +59,36 @@ export async function POST(request: Request) {
         declaredAllergens: JSON.stringify(input.declaredAllergens),
         compositionVerified: composition.verified,
         unknownIngredients: JSON.stringify(composition.unknown),
-        status: 'published',
+        moderationIssues: JSON.stringify(verdict.issues),
+        status: verdict.status,
       },
     })
 
     logEvent('info', 'user_recipe.created', {
       verified: composition.verified,
       unknownCount: composition.unknown.length,
+      status: verdict.status,
+      blocked: verdict.issues.filter((i) => i.severity === 'block').map((i) => i.code),
     })
 
+    const blocking = verdict.issues.filter((i) => i.severity === 'block')
     return {
       id: recipe.id,
       slug: recipe.slug,
+      status: verdict.status,
+      issues: verdict.issues,
       compositionVerified: composition.verified,
       unknownIngredients: composition.unknown,
       /**
-       * Чесно кажемо авторові, що саме означає «неперевірений»:
-       * рецепт видно всім, але агент не покладе його в раціон, бо не може
-       * зіставити склад із коморою й обмеженнями родини.
+       * Одне речення, яке автор прочитає замість вердикту: що сталося
+       * з рецептом і що робити далі.
        */
-      note: composition.verified
-        ? 'Склад розпізнано повністю — агент зможе враховувати цей рецепт у підборі страв.'
-        : `Не вдалося розпізнати: ${composition.unknown.join(', ')}. Рецепт опубліковано, але агент не братиме його в раціон, бо не може звірити склад із вашою коморою й алергіями.`,
+      note:
+        blocking.length > 0
+          ? `Рецепт збережено як чернетку — його поки не видно у стрічці. ${blocking.map((i) => i.message).join(' ')}`
+          : composition.verified
+            ? 'Склад розпізнано повністю — агент зможе враховувати цей рецепт у підборі страв.'
+            : `Не вдалося розпізнати: ${composition.unknown.join(', ')}. Рецепт опубліковано, але агент не братиме його в раціон, бо не може звірити склад із вашою коморою й алергіями.`,
     }
   })
 }
@@ -77,11 +102,17 @@ export async function GET(request: Request) {
     // тижні, що вже завершились, отримують зафіксованого переможця й заявку на приз
     await closeFinishedWeeks(now)
 
+    /**
+     * Стрічка показує опубліковане — плюс власні чернетки й приховане
+     * авторові. Інакше рецепт, який не пройшов автоперевірку, зникав би
+     * безслідно: людина натиснула «Опублікувати», нічого не побачила й не
+     * знає, що саме виправляти.
+     */
     const recipes = await prisma.userRecipe.findMany({
-      where: { status: 'published' },
+      where: { OR: [{ status: 'published' }, { authorId: userId }] },
       orderBy: { createdAt: 'desc' },
       take: 50,
-      include: { _count: { select: { votes: true } } },
+      include: { _count: { select: { votes: true, reports: true } } },
     })
 
     const weekVotes = await prisma.recipeVote.groupBy({
@@ -159,6 +190,11 @@ export async function GET(request: Request) {
         declaredAllergens: safeArray(r.declaredAllergens),
         unknownIngredients: safeArray(r.unknownIngredients),
         isMine: r.authorId === userId,
+        status: r.status,
+        // причини й лічильник скарг — тільки авторові: чуже «на нього поскаржились
+        // двічі» перетворило б стрічку на табло репутації
+        moderationIssues: r.authorId === userId ? safeIssues(r.moderationIssues) : [],
+        reports: r.authorId === userId ? r._count.reports : undefined,
         votesTotal: r._count.votes,
         votesThisWeek: votesThisWeek.get(r.id) ?? 0,
         votedByMe: mine.has(r.id),
@@ -166,6 +202,21 @@ export async function GET(request: Request) {
       })),
     }
   })
+}
+
+interface StoredIssue {
+  code: string
+  severity: string
+  message: string
+}
+
+function safeIssues(raw: string): StoredIssue[] {
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as StoredIssue[]) : []
+  } catch {
+    return []
+  }
 }
 
 function safeArray(raw: string): string[] {

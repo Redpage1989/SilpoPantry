@@ -40,6 +40,7 @@ model User {
   userRecipes  UserRecipe[]
   recipeVotes  RecipeVote[]
   weeklyAwards WeeklyAward[]
+  recipeReports RecipeReport[]
 
   @@index([silpoProfileId])
 }
@@ -301,13 +302,19 @@ model UserRecipe {
   unknownIngredients String  @default("[]")
 
   /// "draft" | "published" | "hidden"
+  /// draft — не пройшов автоперевірку, видно лише авторові з причинами;
+  /// hidden — прибраний зі стрічки після скарг
   status    String   @default("published")
+  /// JSON: [{ code, severity, message }] — вердикт автоперевірки.
+  /// Зберігається, щоб автор бачив ПРИЧИНУ, а не просто «не опубліковано».
+  moderationIssues String @default("[]")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  author User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  votes  RecipeVote[]
-  awards WeeklyAward[]
+  author  User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  votes   RecipeVote[]
+  awards  WeeklyAward[]
+  reports RecipeReport[]
 
   @@index([status, createdAt])
   @@index([authorId])
@@ -335,6 +342,23 @@ model RecipeVote {
 /// голоси не мають змінювати вже оголошеного переможця. Статус завжди
 /// починається з "pending" — застосунок не нараховує балабонуси сам, у MCP
 /// «Сільпо» немає інструмента запису лояльності (див. weekly-award.ts).
+/// Скарга на рецепт спільноти. Одна людина — один голос проти рецепта:
+/// без цієї межі один незадоволений сховав би будь-що з кількох вкладок.
+model RecipeReport {
+  id           String   @id @default(cuid())
+  userRecipeId String
+  reporterId   String
+  /// "unsafe" | "spam" | "not_a_recipe" | "other"
+  reason       String
+  createdAt    DateTime @default(now())
+
+  recipe   UserRecipe @relation(fields: [userRecipeId], references: [id], onDelete: Cascade)
+  reporter User       @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([userRecipeId, reporterId])
+  @@index([userRecipeId])
+}
+
 model WeeklyAward {
   id           String    @id @default(cuid())
   /// "2026-W32" — один переможець на тиждень

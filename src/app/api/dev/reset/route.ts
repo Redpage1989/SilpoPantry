@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { resetDemoCart } from '@/lib/mcp/mock-adapter'
 import { seedDemoUser, seedRecipes } from '@/lib/seed/demo'
+import { seedCommunity } from '@/lib/seed/community'
 import { errorResponse } from '@/lib/api'
 import { getUserId, rateLimit } from '@/lib/session'
 
@@ -56,10 +57,31 @@ export async function POST() {
       await prisma.user.updateMany({ where: { id: userId }, data: { authMode: 'demo' } })
     }
 
+    /**
+     * Рецепти, написані демо-користувачем, теж скидаються — але тільки його
+     * власні: рецепти вигаданих родин зі стрічки лишаються на місці.
+     * Без цього кожен прогін E2E лишав по чернетці, і наступний падав на
+     * двох однакових заголовках у стрічці.
+     *
+     * Свідомо саме тут, а не в seedDemoUser: той викликається ще й при вході
+     * в демо з порожньою коморою, і видаляти там чийсь щойно написаний
+     * рецепт було б несподіванкою.
+     */
+    if (userId === 'demo-user') {
+      await prisma.userRecipe.deleteMany({ where: { authorId: userId } })
+    }
+
     await resetDemoCart(userId)
     await seedRecipes(prisma)
     const result = await seedDemoUser(prisma, userId)
-    return NextResponse.json({ ok: true, userId, ...result })
+    /**
+     * Стрічка спільноти теж належить до «відомого стану». Без неї скидання
+     * давало картину, якої людина при вході ніколи не бачить: комора повна,
+     * а рецептів від інших родин немає — і тест на скарги не мав на що
+     * скаржитись.
+     */
+    const community = await seedCommunity(prisma)
+    return NextResponse.json({ ok: true, userId, ...result, community })
   } catch (err) {
     return errorResponse(err)
   }

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { seedRecipes, seedDemoUser } from '../src/lib/seed/demo'
+import { seedCommunity } from '../src/lib/seed/community'
 
 /**
  * Seed для demo mode. Уся логіка живе в src/lib/seed/demo.ts,
@@ -14,6 +15,8 @@ async function main() {
   const demo = await seedDemoUser(prisma)
   console.log(`   ✓ родина: ${demo.members} особи, обмежень: ${demo.restrictions}`)
   console.log(`   ✓ комора: ${demo.pantry} позицій (шпинат — «використати сьогодні»)`)
+  const community = await seedCommunity(prisma)
+  console.log(`   ✓ спільнота: ${community.recipes} рецептів від ${community.authors} родин, голосів ${community.votes}`)
   console.log('✅ Готово. Demo mode доступний одразу після запуску.')
 }
 

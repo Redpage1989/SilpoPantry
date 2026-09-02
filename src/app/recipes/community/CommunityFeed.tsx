@@ -23,10 +23,22 @@ interface CommunityRecipe {
   declaredAllergens: string[]
   unknownIngredients: string[]
   isMine: boolean
+  status: 'published' | 'draft' | 'hidden'
+  /** причини автоперевірки — приходять лише авторові */
+  moderationIssues: { code: string; severity: 'block' | 'warn'; message: string }[]
+  /** скільки скарг — теж лише авторові */
+  reports?: number
   votesTotal: number
   votesThisWeek: number
   votedByMe: boolean
 }
+
+const REPORT_REASONS = [
+  { value: 'unsafe', label: 'Небезпечна порада' },
+  { value: 'spam', label: 'Реклама або спам' },
+  { value: 'not_a_recipe', label: 'Це не рецепт' },
+  { value: 'other', label: 'Інше' },
+] as const
 
 interface WeeklyAward {
   isoWeek: string
@@ -66,12 +78,34 @@ export function CommunityFeed() {
     onError: (err) => setError(err instanceof ApiError ? err.message : 'Не вдалося проголосувати'),
   })
 
+  const [reportingId, setReportingId] = useState<string | null>(null)
+  const report = useMutation({
+    mutationFn: (v: { recipeId: string; reason: string }) => apiPost<{ note: string }>('/api/user-recipes/report', v),
+    onSuccess: (res) => {
+      setReportingId(null)
+      setNotice(res.note)
+      qc.invalidateQueries({ queryKey: ['community'] })
+    },
+    onError: (err) => {
+      setReportingId(null)
+      setError(err instanceof ApiError ? err.message : 'Не вдалося надіслати скаргу')
+    },
+  })
+  const [notice, setNotice] = useState<string | null>(null)
+
   useEffect(() => {
     if (error) {
       const t = setTimeout(() => setError(null), 4000)
       return () => clearTimeout(t)
     }
   }, [error])
+
+  useEffect(() => {
+    if (notice) {
+      const t = setTimeout(() => setNotice(null), 6000)
+      return () => clearTimeout(t)
+    }
+  }, [notice])
 
   const data = feed.data
   const winner = data?.recipes.find((r) => r.id === data.winner.recipeId)
@@ -83,6 +117,7 @@ export function CommunityFeed() {
       </LinkButton>
 
       {error && <div className="rounded-2xl bg-danger-50 p-3 text-[13px] text-danger-700">{error}</div>}
+      {notice && <div className="rounded-2xl bg-cream-100 p-3 text-[13px] text-graphite-700">{notice}</div>}
 
       {feed.isLoading && <Card><p className="text-[13px] text-graphite-500">Завантажую…</p></Card>}
 
@@ -190,7 +225,11 @@ export function CommunityFeed() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="text-[15px] font-semibold leading-tight">{r.title}</h3>
-                    {r.isMine && <Badge tone="neutral">ваш</Badge>}
+                    <div className="flex shrink-0 gap-1">
+                      {r.status === 'draft' && <Badge tone="warn">чернетка</Badge>}
+                      {r.status === 'hidden' && <Badge tone="danger">сховано</Badge>}
+                      {r.isMine && <Badge tone="neutral">ваш</Badge>}
+                    </div>
                   </div>
                   <p className="mt-0.5 text-[12px] text-graphite-500">{r.summary}</p>
                   <div className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-graphite-500">
@@ -216,20 +255,82 @@ export function CommunityFeed() {
                 </div>
               )}
 
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <span className="text-[12px] text-graphite-500">
-                  {r.votesThisWeek} {pluralize(r.votesThisWeek, 'голос', 'голоси', 'голосів')} цього тижня
-                  {r.votesTotal > r.votesThisWeek && ` · ${r.votesTotal} усього`}
-                </span>
-                <Button
-                  variant={r.votedByMe ? 'primary' : 'secondary'}
-                  className="min-h-[44px] px-4 text-[13px]"
-                  disabled={r.isMine || vote.isPending}
-                  onClick={() => vote.mutate(r.id)}
+              {/* Вердикт автоперевірки бачить лише автор: це підказка, що виправити,
+                  а не публічна оцінка рецепта */}
+              {r.moderationIssues.map((issue) => (
+                <div
+                  key={issue.code}
+                  className={`mt-2 rounded-2xl p-2.5 text-[12px] leading-relaxed ${
+                    issue.severity === 'block' ? 'bg-danger-50 text-danger-700' : 'bg-cream-100 text-graphite-500'
+                  }`}
                 >
-                  {r.isMine ? 'свій рецепт' : r.votedByMe ? '★ Проголосовано' : '☆ Голосувати'}
-                </Button>
-              </div>
+                  {issue.severity === 'block' ? '⚠ ' : 'ⓘ '}
+                  {issue.message}
+                </div>
+              ))}
+
+              {r.status === 'hidden' && r.isMine && (
+                <div className="mt-2 rounded-2xl bg-danger-50 p-2.5 text-[12px] leading-relaxed text-danger-700">
+                  Рецепт прибрано зі стрічки за скаргами читачів ({r.reports}). Виправте його або
+                  напишіть нам, якщо вважаєте це помилкою.
+                </div>
+              )}
+
+              {r.status === 'published' && (
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className="text-[12px] text-graphite-500">
+                    {r.votesThisWeek} {pluralize(r.votesThisWeek, 'голос', 'голоси', 'голосів')} цього тижня
+                    {r.votesTotal > r.votesThisWeek && ` · ${r.votesTotal} усього`}
+                  </span>
+                  <Button
+                    variant={r.votedByMe ? 'primary' : 'secondary'}
+                    className="min-h-[44px] px-4 text-[13px]"
+                    disabled={r.isMine || vote.isPending}
+                    onClick={() => vote.mutate(r.id)}
+                  >
+                    {r.isMine ? 'свій рецепт' : r.votedByMe ? '★ Проголосовано' : '☆ Голосувати'}
+                  </Button>
+                </div>
+              )}
+
+              {/* Скарга — друга половина модерації: автоперевірка не бачить
+                  небезпечної поради, а читач бачить. Кнопка навмисно дрібна:
+                  це не рівноцінна дія з голосуванням */}
+              {r.status === 'published' && !r.isMine && (
+                reportingId === r.id ? (
+                  <div className="mt-2 rounded-2xl bg-cream-100 p-2.5">
+                    <p className="text-[12px] text-graphite-700">Що не так із рецептом?</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {REPORT_REASONS.map((reason) => (
+                        <button
+                          key={reason.value}
+                          type="button"
+                          className="min-h-[36px] rounded-full bg-white px-3 text-[12px] text-graphite-700"
+                          disabled={report.isPending}
+                          onClick={() => report.mutate({ recipeId: r.id, reason: reason.value })}
+                        >
+                          {reason.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="min-h-[36px] px-3 text-[12px] text-graphite-500"
+                        onClick={() => setReportingId(null)}
+                      >
+                        Скасувати
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="mt-2 min-h-[36px] text-[11px] text-graphite-300 underline"
+                    onClick={() => setReportingId(r.id)}
+                  >
+                    Поскаржитись
+                  </button>
+                )
+              )}
             </Card>
           ))}
         </>

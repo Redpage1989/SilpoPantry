@@ -229,6 +229,13 @@ async function main() {
   // замість «2 шт» буде «0,4 кг», і жорстка перевірка ламає весь запис.
   await tap(page, page.getByRole('button', { name: /Збільшити кількість/ }).first())
   await page.waitForTimeout(1200)
+  /**
+   * Зміна кількості перемальовує кошик через router.refresh(). Поки та
+   * навігація в польоті, page.evaluate у scrollTo падає з «Execution context
+   * was destroyed» — і весь трихвилинний запис іде намарно. Пауза в 1,2 с
+   * від цього не рятує: на завантаженій машині оновлення приходить пізніше.
+   */
+  await page.waitForLoadState('networkidle').catch(() => {})
   await scrollTo(page, 880); await pace(page)
 
   // 18 спільнота

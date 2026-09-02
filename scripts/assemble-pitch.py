@@ -23,16 +23,42 @@ INTRO = ["in1", "in2", "in3"]
 OUTRO = ["out1", "out2", "out3", "out4", "out5"]
 PAD = 0.35  # пауза після останнього слова, щоб слайд не зникав різко
 
-# Демо обрізається на 164,5 с (мова закінчується о 164,0). Далі йшло 5 с
-# фінального титру — зайвих: одразу за демо йдуть слайди фіналу, і другий
-# «кінець» посеред відео збивав би ритм.
-DEMO_END = 164.5
+# Демо обрізається одразу по закінченні мови. Далі в записі лишається
+# фінальний титр — зайвий: за демо йдуть слайди фіналу, і другий «кінець»
+# посеред відео збивав би ритм.
+#
+# Момент рахується з доріжки, а не константою. Константа (було 164,5 с)
+# мовчки псує збірку після кожного перезапису демо: відео стає іншої
+# довжини, а число лишається старим — обрізали б посеред речення.
+DEMO_TAIL = 0.5  # скільки лишити після останнього слова
 
 
 def dur(p: Path) -> float:
     return float(subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
          "-of", "csv=p=0", str(p)], capture_output=True, text=True).stdout.strip())
+
+
+def speech_end(media: Path) -> float:
+    """Момент останнього слова: кінець останньої тиші, що триває до кінця.
+
+    Тиша шукається тим самим порогом, що й межі абзаців (-45 дБ). Якщо
+    останнього «хвоста» тиші немає — мова йде до самого кінця файлу, і
+    різати нема чого.
+    """
+    total = dur(media)
+    log = subprocess.run(
+        ["ffmpeg", "-v", "info", "-i", str(media),
+         "-af", "silencedetect=noise=-45dB:d=0.6", "-f", "null", "-"],
+        capture_output=True, text=True).stderr
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", log)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", log)]
+    # Хвіст — остання тиша, що тягнеться до кінця файлу. ffmpeg закриває її
+    # власним silence_end на EOF, тож рахувати пари «більше початків, ніж
+    # кінців» не можна: їх завжди порівну.
+    if starts and (not ends or ends[-1] >= total - 0.15):
+        return starts[-1]
+    return total
 
 
 def split_by_text(audio: Path, paragraphs: list[str]) -> list[float]:
@@ -110,9 +136,10 @@ def main() -> int:
             print(f"  {n}  {sec:5.1f} с  {p_in[i][:44]}…")
 
         mid = tmp / "demo.mp4"
+        demo_end = speech_end(DEMO) + DEMO_TAIL
         # Лімітер і тут: без нього AAC на перекодуванні дає пік вище нуля —
         # заміряно +0,29 дБ саме на цьому сегменті.
-        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(DEMO), "-t", str(DEMO_END),
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(DEMO), "-t", f"{demo_end:.2f}",
                         "-c:v", "libx264", "-crf", "20", "-preset", "medium",
                         "-pix_fmt", "yuv420p", "-r", "25",
                         "-af", "alimiter=limit=0.79",

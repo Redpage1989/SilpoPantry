@@ -173,15 +173,47 @@ function expiryRescueScore(
   const weightSum = expiring.reduce((s, p) => s + (daysUntil(p.expiryDate!, now) <= URGENT_DAYS ? 2 : 1), 0)
   const gained = rescued.reduce((s, p) => s + (daysUntil(p.expiryDate!, now) <= URGENT_DAYS ? 2 : 1), 0)
   const value = weightSum === 0 ? 0.5 : clamp01(gained / weightSum)
-  const names = rescued.map((p) => displayName(p.originalName))
+  const names = uniqueNames(rescued)
   return {
     value,
-    urgentNames: urgent.map((p) => displayName(p.originalName)),
+    urgentNames: uniqueNames(urgent),
     explanation:
       names.length === 0
         ? 'Не використовує продукти, які скоро зіпсуються'
-        : `Використовує ${names.join(', ')} — їх варто спожити найближчим часом`,
+        : `Використовує ${formatNameList(names)} — ${names.length > 1 ? 'їх' : 'його'} варто спожити найближчим часом`,
   }
+}
+
+/** Максимум назв у переліку; решта згортається в «та ще N». */
+const MAX_LISTED_NAMES = 3
+
+/**
+ * Унікальні назви продуктів для переліку в поясненні.
+ *
+ * Кілька рядків комори з одним ключем («Шпинат» ×3 і «Шпинат свіжий») — це
+ * один продукт для користувача. Без згортання фраза перетворювалась на
+ * «зокрема Шпинат і Шпинат і Шпинат і Шпинат свіжий»: скільки рядків
+ * зматчилось, стільки разів назва й повторювалась.
+ *
+ * Ключ згортання — `normalizedName`, бо саме він визначає продукт; підпис
+ * береться з першого рядка. Другий прохід прибирає випадкові збіги підписів
+ * у різних ключів.
+ */
+function uniqueNames(entries: PantryEntry[]): string[] {
+  const byKey = new Map<string, string>()
+  for (const p of entries) {
+    if (!byKey.has(p.normalizedName)) byKey.set(p.normalizedName, displayName(p.originalName))
+  }
+  return [...new Set(byKey.values())]
+}
+
+/** «А, Б і В» для короткого переліку, «А, Б, В та ще 2» — для довгого. */
+function formatNameList(names: string[]): string {
+  if (names.length > MAX_LISTED_NAMES) {
+    return `${names.slice(0, MAX_LISTED_NAMES).join(', ')} та ще ${names.length - MAX_LISTED_NAMES}`
+  }
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} і ${names[names.length - 1]}`
 }
 
 function budgetMatchScore(missingCost: Kopiyky, maxBudget: Kopiyky | null): { value: number; explanation: string } {
@@ -261,7 +293,9 @@ function buildReason(
     parts.push('Для цієї страви поки що немає продуктів удома')
   }
   if (expiry.urgentNames.length > 0) {
-    parts.push(`зокрема ${expiry.urgentNames.join(' і ')}, ${expiry.urgentNames.length > 1 ? 'які' : 'який'} бажано використати до завтра`)
+    parts.push(
+      `зокрема ${formatNameList(expiry.urgentNames)}, ${expiry.urgentNames.length > 1 ? 'які' : 'який'} бажано використати до завтра`,
+    )
   }
   const missCount = coverage.missing.filter((m) => !m.optional).length
   if (missCount === 0) parts.push('докуповувати нічого не треба')

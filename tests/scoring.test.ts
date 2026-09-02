@@ -6,6 +6,8 @@ import { checkRecipeAgainstRestrictions, checkProductAgainstRestrictions } from 
 const localDate = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12)
 const NOW = localDate(2026, 9, 10)
 
+const occurrences = (text: string, needle: string) => text.split(needle).length - 1
+
 function household(restrictions: Restriction[] = []): HouseholdContext {
   return {
     displayName: 'Антон',
@@ -108,6 +110,49 @@ describe('scoreRecipe', () => {
     })
     expect(s.reason).toContain('Молоко 2,5%')
     expect(s.reason).toContain('до завтра')
+  })
+
+  it('кілька рядків комори з одним продуктом згадуються в поясненні один раз', () => {
+    // саме цей випадок ламав демо: «зокрема Шпинат і Шпинат і Шпинат і Шпинат свіжий»
+    const tomorrow = localDate(2026, 9, 11)
+    const spinachRow = (id: string, originalName: string) =>
+      pantryItem({ id, normalizedName: 'шпинат', originalName, unit: 'г', quantity: 100, expiryDate: tomorrow })
+    const s = scoreRecipe(
+      recipe({ ingredients: [{ name: 'Шпинат', normalizedName: 'шпинат', quantity: 400, unit: 'г' }] }),
+      {
+        pantry: [
+          spinachRow('p1', 'Шпинат'),
+          spinachRow('p2', 'Шпинат'),
+          spinachRow('p3', 'Шпинат'),
+          spinachRow('p4', 'Шпинат свіжий'),
+        ],
+        household: household(),
+        now: NOW,
+      },
+    )
+    expect(occurrences(s.reason, 'Шпинат')).toBe(1)
+    expect(s.reason).toContain('до завтра')
+    const rescue = s.factors.find((f) => f.key === 'expiryRescue')!
+    expect(occurrences(rescue.explanation, 'Шпинат')).toBe(1)
+  })
+
+  it('довгий перелік продуктів згортається до трьох назв і «та ще N»', () => {
+    const tomorrow = localDate(2026, 9, 11)
+    const keys = ['рис', 'гречка', 'морква', 'капуста', 'буряк']
+    const s = scoreRecipe(
+      recipe({
+        ingredients: keys.map((k) => ({ name: k, normalizedName: k, quantity: 100, unit: 'г' as const })),
+      }),
+      {
+        pantry: keys.map((k) => pantryItem({ id: k, normalizedName: k, unit: 'г', quantity: 500, expiryDate: tomorrow })),
+        household: household(),
+        now: NOW,
+      },
+    )
+    expect(s.reason).toContain('та ще 2')
+    const rescue = s.factors.find((f) => f.key === 'expiryRescue')!
+    expect(rescue.explanation).toContain('та ще 2')
+    expect(occurrences(s.reason, 'Буряк')).toBe(0)
   })
 
   it('перевищення бюджету обнуляє фактор бюджету, але не блокує страву', () => {

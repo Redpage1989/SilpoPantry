@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client'
 import { SEED_RECIPES } from './recipes'
 import { normalizeProductName, guessCategory } from '@/lib/domain/normalize'
+import { seedActivity } from './activity'
 
 /**
  * Наповнення demo-даними. Винесено в бібліотеку, щоб один і той самий код
@@ -147,5 +148,12 @@ export async function seedDemoUser(prisma: PrismaClient, userId = DEMO_USER_ID) 
     })
   }
 
-  return { members: 3, restrictions: 1, pantry: DEMO_PANTRY.length }
+  /**
+   * Історія користування — частина демо-родини, а не окремий сідер: без неї
+   * екран «Що змінилось» показує чотири прочерки, і людина не розуміє, що
+   * саме застосунок міряє.
+   */
+  const activity = await seedActivity(prisma, userId)
+
+  return { members: 3, restrictions: 1, pantry: DEMO_PANTRY.length, activity }
 }

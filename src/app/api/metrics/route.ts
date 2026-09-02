@@ -11,7 +11,7 @@ import { buildMetrics } from '@/lib/domain/metrics'
  */
 export async function GET(request: Request) {
   return handle(request, {}, async (userId) => {
-    const [meals, eaten, wasted, proposals, addedToCart, first] = await Promise.all([
+    const [meals, eaten, wasted, proposals, addedToCart, first, firstMeal] = await Promise.all([
       prisma.cookedMeal.findMany({
         where: { userId },
         select: { fromPantry: true, total: true },
@@ -23,19 +23,30 @@ export async function GET(request: Request) {
       prisma.shoppingProposal.count({ where: { userId } }),
       prisma.shoppingProposal.count({ where: { userId, status: 'added_to_cart' } }),
       /**
-       * Точка відліку — найстаріша позиція комори, а не дата створення
-       * акаунта: демо-користувач існує з першого деплою, і від нього
-       * «днів користування» рахувалися б місяцями без жодної дії.
+       * Точка відліку — найстаріша ПОДІЯ, а не дата створення акаунта:
+       * демо-користувач існує з першого деплою, і від нього «днів
+       * користування» рахувалися б місяцями без жодної дії.
+       *
+       * Беремо і комору, і приготовані страви: історія на два тижні поруч із
+       * «днів користування: 0» виглядала б як помилка.
        */
       prisma.pantryItem.findFirst({
         where: { userId },
         orderBy: { createdAt: 'asc' },
         select: { createdAt: true },
       }),
+      prisma.cookedMeal.findFirst({
+        where: { userId },
+        orderBy: { cookedAt: 'asc' },
+        select: { cookedAt: true },
+      }),
     ])
 
-    const daysObserved = first
-      ? Math.floor((Date.now() - first.createdAt.getTime()) / 86_400_000)
+    const startedAt = [first?.createdAt, firstMeal?.cookedAt]
+      .filter((d): d is Date => !!d)
+      .sort((a, b) => a.getTime() - b.getTime())[0]
+    const daysObserved = startedAt
+      ? Math.floor((Date.now() - startedAt.getTime()) / 86_400_000)
       : 0
 
     return {

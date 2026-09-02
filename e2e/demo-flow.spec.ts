@@ -291,11 +291,22 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
       return new Map(res.metrics.map((m: { key: string; value: string | null; hint: string }) => [m.key, m]))
     }
 
-    const before = (await metrics()).get('eatenInTime') as { value: string | null; hint: string }
-    expect(before.value, 'після скидання подій немає — числа теж').toBeNull()
-    expect(before.hint).toMatch(/немає|Замало/)
+    /**
+     * Демо приходить із історією користування: без неї екран показував
+     * чотири прочерки, і людина не розуміла, що застосунок міряє.
+     * Числа рахуються з подій — тут перевіряємо, що вони справді є.
+     */
+    const seeded = await metrics()
+    for (const key of ['cookedFromPantry', 'eatenInTime', 'adviceToCart']) {
+      const m = seeded.get(key) as { value: string | null }
+      expect(m.value, `${key} має бути порахованим на сідованій історії`).toMatch(/^\d+%$/)
+    }
+    // а утримання — ні: місяця користування немає, і вигадувати його не можна
+    expect((seeded.get('retention') as { value: string | null }).value).toBeNull()
 
-    // три викинуті позиції — рівно поріг, за яким відсоток стає осмисленим
+    const before = seeded.get('eatenInTime') as { value: string | null; hint: string }
+
+    // ще три викинуті позиції мають зрушити частку втрат униз
     const items = (await (await page.request.get('/api/pantry')).json()).items as { id: string }[]
     for (const item of items.slice(0, 3)) {
       const res = await page.request.post('/api/pantry/waste', { headers, data: { id: item.id } })
@@ -303,8 +314,8 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
     }
 
     const after = (await metrics()).get('eatenInTime') as { value: string | null; hint: string }
-    expect(after.value, 'три події — метрика має заговорити').toBe('0%')
-    expect(after.hint).toContain('3 викинуто')
+    expect(after.value, 'нові втрати мають змінити метрику').not.toBe(before.value)
+    expect(after.hint).toContain('6 викинуто')
 
     // повторна спроба викинути те саме нічого не додає
     const again = await page.request.post('/api/pantry/waste', { headers, data: { id: items[0].id } })

@@ -22,7 +22,16 @@ import { seedCommunity } from '@/lib/seed/community'
  */
 export async function POST() {
   try {
-    const pantrySize = await prisma.pantryItem.count({ where: { userId: DEMO_USER_ID } })
+    /**
+     * «Порожня» рахується тим самим фільтром, що й видима комора
+     * (`loadPantry`): спожите й викинуте лишається рядками таблиці назавжди.
+     * Без цієї умови сідована історія користування тримала лічильник вище
+     * нуля, і спорожнена комора більше ніколи не наповнювалась — тест 9
+     * упіймав це першим же прогоном.
+     */
+    const pantrySize = await prisma.pantryItem.count({
+      where: { userId: DEMO_USER_ID, consumedAt: null, quantity: { gt: 0 } },
+    })
     if (pantrySize === 0) {
       await seedRecipes(prisma)
       await seedDemoUser(prisma, DEMO_USER_ID)

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildMetrics, MIN_EVENTS } from '@/lib/domain/metrics'
+import { COOKED_SEED, EATEN_SEED, WASTED_SEED, PROPOSALS_SEED } from '@/lib/seed/activity'
 
 /**
  * Метрики, які пітч називає вголос. Головне правило тут — не показувати
@@ -129,5 +130,28 @@ describe('buildMetrics', () => {
       'adviceToCart',
       'retention',
     ])
+  })
+})
+
+describe('сідована історія демо', () => {
+  /**
+   * Демо має показувати числа, а не чотири прочерки: інакше людина не
+   * розуміє, ЩО застосунок міряє. Але числа мають лишатись правдоподібними —
+   * 100% скрізь виглядало б як реклама, а не як вимірювання.
+   */
+  it('сідованої історії досить для трьох метрик, і жодна не ідеальна', () => {
+    const m = buildMetrics({
+      cooked: COOKED_SEED,
+      disposals: { eaten: EATEN_SEED, wasted: WASTED_SEED },
+      proposals: { total: PROPOSALS_SEED.length, addedToCart: PROPOSALS_SEED.filter(Boolean).length },
+      daysObserved: 14,
+    })
+    for (const key of ['cookedFromPantry', 'eatenInTime', 'adviceToCart']) {
+      const card = m.find((x) => x.key === key)!
+      expect(card.enough, `${key} має бути порахованим`).toBe(true)
+      expect(card.value).toMatch(/^\d+%$/)
+      expect(card.value, `${key}: 100% виглядає як реклама`).not.toBe('100%')
+    }
+    expect(m.find((x) => x.key === 'retention')!.value).toBeNull()
   })
 })

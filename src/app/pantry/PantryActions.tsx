@@ -7,7 +7,11 @@ import { apiPut, apiPost, ApiError } from '@/lib/client'
 
 interface ImportResult {
   imported: number
+  /** позицій, до яких додали куплене поверх наявного */
+  toppedUp: number
   skipped: number
+  /** скільки чеків опрацьовано цього разу; 0 — усі вже враховані */
+  newReceipts: number
   mode: 'live' | 'mock'
   modeReason: string
 }
@@ -47,8 +51,16 @@ export function PantryActions() {
 
       {result && (
         <InfoNote>
-          Додано <strong>{result.imported}</strong> позицій з історії покупок, пропущено{' '}
-          <strong>{result.skipped}</strong> (протерміноване, непродовольче або вже спожите).
+          {result.newReceipts === 0 ? (
+            <>Нових чеків немає — усі покупки з історії вже враховані в коморі.</>
+          ) : (
+            <>
+              Опрацьовано <strong>{result.newReceipts}</strong>{' '}
+              {result.newReceipts === 1 ? 'чек' : result.newReceipts < 5 ? 'чеки' : 'чеків'}: додано{' '}
+              <strong>{result.imported}</strong> позицій, поповнено <strong>{result.toppedUp}</strong>,
+              пропущено <strong>{result.skipped}</strong> (протерміноване, непродовольче або вже спожите).
+            </>
+          )}
           {result.mode === 'mock' && ' Дані демонстраційні.'}
         </InfoNote>
       )}

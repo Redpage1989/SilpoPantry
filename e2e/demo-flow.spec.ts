@@ -277,6 +277,45 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
   })
 
   /**
+   * Імпорт чеків має ПОПОВНЮВАТИ комору, а не пропускати наявне, і при
+   * цьому не подвоювати при повторному натисканні. Раніше ці дві вимоги
+   * конфліктували: від подвоєння рятувало правило «продукт уже є —
+   * пропустити», через яке куплене вдруге просто зникало.
+   */
+  test('12. Імпорт чеків поповнює наявне й не подвоює при повторі', async ({ page, context }) => {
+    await startDemo(page)
+    const csrf = (await context.cookies()).find((c) => c.name === 'sp_csrf')?.value
+    const headers = { 'x-csrf-token': csrf as string }
+
+    const totals = async () => {
+      const items = (await (await page.request.get('/api/pantry')).json()).items as {
+        normalizedName: string
+        quantity: number
+        unit: string
+      }[]
+      return new Map(items.map((i) => [i.normalizedName, `${i.quantity} ${i.unit}`]))
+    }
+
+    const before = await totals()
+    // у сідованій коморі вже є молоко — саме на ньому видно різницю
+    expect(before.has('молоко')).toBe(true)
+
+    const first = await (await page.request.put('/api/pantry', { headers })).json()
+    expect(first.newReceipts).toBeGreaterThan(0)
+    expect(first.toppedUp, 'наявні продукти мають поповнитись, а не пропуститись').toBeGreaterThan(0)
+
+    const after = await totals()
+    expect(after.get('молоко'), 'кількість молока мала зрости').not.toBe(before.get('молоко'))
+
+    // повторний імпорт тих самих чеків не додає нічого
+    const second = await (await page.request.put('/api/pantry', { headers })).json()
+    expect(second.newReceipts).toBe(0)
+    expect(second.imported).toBe(0)
+    expect(second.toppedUp).toBe(0)
+    expect(await totals(), 'повторний імпорт не має змінювати комору').toEqual(after)
+  })
+
+  /**
    * Модерація рецептів спільноти: автоперевірка до публікації і скарги після.
    * Тест ходить через API, а не форму: форма перевіряється окремо, а тут
    * важливий саме вердикт і те, що чернетка не потрапляє у стрічку.

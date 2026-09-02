@@ -389,24 +389,81 @@ export async function updatePantryInventory(
   })
 }
 
-/** Наповнення комори з історії покупок — ключовий сценарій продукту. */
-export async function importPantryFromReceipts(ctx: ToolContext): Promise<{ imported: number; skipped: number }> {
+/**
+ * Наповнення комори з історії покупок — ключовий сценарій продукту.
+ *
+ * Ідемпотентність тримається на журналі чеків, а не на назвах продуктів.
+ *
+ * Спершу було навпаки: рахувались усі чеки щоразу, а від подвоєння рятувало
+ * правило «продукт уже в коморі — пропустити». Воно й справді не подвоювало,
+ * але й не поповнювало: купили ще молока — комора про це не дізнавалась,
+ * бо молоко там «уже було». Продукт, який обіцяє знати, що є вдома, мовчки
+ * недораховував половину покупок.
+ *
+ * Тепер обробляються лише чеки, яких немає в `receiptImport` (унікальний
+ * `[userId, orderRef]`), а їхні позиції ДОДАЮТЬСЯ до наявних тим самим
+ * правилом, що й підтверджене з фото: `planPantryWrite` для джерела-покупки
+ * додає кількість, а не замінює.
+ */
+export async function importPantryFromReceipts(
+  ctx: ToolContext,
+): Promise<{ imported: number; toppedUp: number; skipped: number; newReceipts: number }> {
   return step(ctx, 'importPantryFromReceipts', {}, async () => {
     const orders = await ctx.adapter.getOrders()
+
+    const seen = await prisma.receiptImport.findMany({
+      where: { userId: ctx.userId },
+      select: { orderRef: true },
+    })
+    const known = new Set(seen.map((r) => r.orderRef))
+    const fresh = orders.filter((o) => !known.has(o.orderId))
+
+    if (fresh.length === 0) {
+      return {
+        result: { imported: 0, toppedUp: 0, skipped: 0, newReceipts: 0 },
+        summary: `Нових чеків немає: усі ${orders.length} вже враховані в коморі`,
+        output: { newReceipts: 0 },
+      }
+    }
+
     const { items, decisions } = inferPantryFromReceipts(
-      orders.map((o) => ({ orderId: o.orderId, date: o.date, kind: o.kind, items: o.items })),
+      fresh.map((o) => ({ orderId: o.orderId, date: o.date, kind: o.kind, items: o.items })),
       ctx.now,
     )
 
-    const existing = await prisma.pantryItem.findMany({
-      where: { userId: ctx.userId, consumedAt: null },
-      select: { normalizedName: true },
-    })
-    const known = new Set(existing.map((e) => e.normalizedName))
-
     let imported = 0
+    let toppedUp = 0
     for (const item of items) {
-      if (known.has(item.normalizedName)) continue
+      const twin = await prisma.pantryItem.findFirst({
+        where: { userId: ctx.userId, normalizedName: item.normalizedName, consumedAt: null, quantity: { gt: 0 } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, quantity: true, unit: true, expiryDate: true },
+      })
+      const plan = planPantryWrite(
+        twin ? { ...twin, unit: twin.unit as Unit } : null,
+        { quantity: item.quantity, unit: item.unit, expiryDate: item.expiryDate, source: item.source },
+      )
+
+      if (plan.action === 'merge') {
+        /**
+         * Куплене додається до залишку, а рядок лишає собі назву й джерело:
+         * «Молоко 2,5%» з чека не має перетворюватись на іншу позицію лише
+         * тому, що наступного разу в чеку було «Молоко 2,5%, 900 мл».
+         */
+        await prisma.pantryItem.update({
+          where: { id: plan.id },
+          data: {
+            quantity: plan.quantity,
+            unit: plan.unit,
+            expiryDate: plan.expiryDate,
+            confidence: item.confidence,
+            needsConfirmation: true,
+          },
+        })
+        toppedUp += 1
+        continue
+      }
+
       await prisma.pantryItem.create({
         data: {
           userId: ctx.userId,
@@ -426,7 +483,12 @@ export async function importPantryFromReceipts(ctx: ToolContext): Promise<{ impo
       imported += 1
     }
 
-    for (const order of orders) {
+    /**
+     * Журнал пишеться лише для щойно оброблених чеків — це і є ознака
+     * «враховано». `.catch` лишається запобіжником на гонку двох одночасних
+     * імпортів: унікальність [userId, orderRef] гарантує база.
+     */
+    for (const order of fresh) {
       await prisma.receiptImport
         .create({
           data: {
@@ -434,18 +496,20 @@ export async function importPantryFromReceipts(ctx: ToolContext): Promise<{ impo
             kind: order.kind,
             orderRef: order.orderId,
             orderDate: new Date(order.date),
-            importedCount: imported,
+            importedCount: imported + toppedUp,
             detail: JSON.stringify(decisions.slice(0, 40)),
           },
         })
-        .catch(() => undefined) // унікальний orderRef: повторний імпорт того самого чека ігноруємо
+        .catch(() => undefined)
     }
 
-    const skipped = decisions.filter((d) => d.decision !== 'imported').length
+    const skipped = decisions.filter((d) => d.decision !== 'imported' && d.decision !== 'merged').length
     return {
-      result: { imported, skipped },
-      summary: `З ${orders.length} чеків додано ${imported} позицій, пропущено ${skipped} (протерміноване, непродовольче або вже спожите)`,
-      output: { imported, skipped, sample: decisions.slice(0, 6) },
+      result: { imported, toppedUp, skipped, newReceipts: fresh.length },
+      summary:
+        `З ${fresh.length} нових чеків: додано ${imported} позицій, поповнено ${toppedUp}, ` +
+        `пропущено ${skipped} (протерміноване, непродовольче або вже спожите)`,
+      output: { imported, toppedUp, skipped, newReceipts: fresh.length, sample: decisions.slice(0, 6) },
     }
   })
 }

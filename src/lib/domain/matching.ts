@@ -31,11 +31,21 @@ const FALLBACK_PRICE_PER_BASE_UNIT: Record<string, Kopiyky> = {
 
 const DEFAULT_PRICE_PER_BASE_UNIT: Kopiyky = 15
 
+/**
+ * Ціна завжди задана за БАЗОВУ одиницю (копійка за г / мл / шт) — і своя
+ * в рецепті, і запасна з таблиці вище. Тому кількість переводиться в базову
+ * ОДИН раз, спільно для обох.
+ *
+ * Доти гілка з власною ціною множила на кількість у одиниці інгредієнта.
+ * Для г, мл і шт це те саме число, тож помилка не проявлялась — але олія
+ * «2 ст.л» коштувала 6 × 2 = 12 копійок замість 6 × 30 мл = 1,80 грн, і
+ * саме цей рядок стояв на головному екрані демонстрації: «докупити
+ * ≈ 0,12 грн». Ложка, кілограм, літр і пучок помилялись у 15, 1000, 1000
+ * і 40 разів відповідно.
+ */
 function approxCostFor(ing: RecipeIngredient, missingQty: number): Kopiyky {
-  if (ing.approxPricePerUnit) return Math.round(ing.approxPricePerUnit * missingQty)
-  const perBase = FALLBACK_PRICE_PER_BASE_UNIT[ing.normalizedName] ?? DEFAULT_PRICE_PER_BASE_UNIT
-  const base = toBase(missingQty, ing.unit)
-  return Math.round(perBase * base)
+  const perBase = ing.approxPricePerUnit ?? FALLBACK_PRICE_PER_BASE_UNIT[ing.normalizedName] ?? DEFAULT_PRICE_PER_BASE_UNIT
+  return Math.round(perBase * toBase(missingQty, ing.unit))
 }
 
 /**

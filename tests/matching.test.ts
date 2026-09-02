@@ -151,3 +151,39 @@ describe('calculateMissingIngredients', () => {
     expect(res.approxMissingCost).toBe(3200)
   })
 })
+
+describe('орієнтовна вартість докупівлі', () => {
+  /**
+   * `approxPricePerUnit` задокументовано як копійки за БАЗОВУ одиницю
+   * (г / мл / шт). Поки множення йшло на кількість у власній одиниці
+   * інгредієнта, олія «2 ст.л» коштувала 6 × 2 = 12 копійок замість
+   * 6 × 30 мл = 1,80 грн — і саме ця цифра стояла на головному екрані
+   * демонстрації під написом «докупити ≈ 0,12 грн».
+   */
+  const withOil: RecipeLike = {
+    ...RECIPE,
+    ingredients: [{ name: 'Олія', normalizedName: 'олія', quantity: 2, unit: 'ст.л', approxPricePerUnit: 6 }],
+  }
+
+  it('ложки переводяться в мілілітри, а не рахуються як штуки', () => {
+    const res = calculateMissingIngredients(withOil, pantry([]), { servings: 2, now: NOW })
+    // 2 ст.л = 30 мл, 30 × 6 коп = 180 коп
+    expect(res.missing[0].approxCost).toBe(180)
+    expect(res.approxMissingCost).toBe(180)
+  })
+
+  it('для базових одиниць нічого не змінюється', () => {
+    const res = calculateMissingIngredients(RECIPE, pantry([]), { servings: 2, now: NOW })
+    const pasta = res.missing.find((m) => m.normalizedName === 'макарони')!
+    expect(pasta.approxCost).toBe(2000) // 200 г × 10 коп
+  })
+
+  it('кілограми й літри теж переводяться', () => {
+    const bulk: RecipeLike = {
+      ...RECIPE,
+      ingredients: [{ name: 'Борошно', normalizedName: 'борошно', quantity: 1, unit: 'кг', approxPricePerUnit: 3 }],
+    }
+    const res = calculateMissingIngredients(bulk, pantry([]), { servings: 2, now: NOW })
+    expect(res.missing[0].approxCost).toBe(3000) // 1000 г × 3 коп = 30,00 грн
+  })
+})

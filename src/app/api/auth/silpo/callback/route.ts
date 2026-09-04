@@ -4,6 +4,7 @@ import { config, oauthRedirectUri } from '@/lib/config'
 import { exchangeCodeForToken } from '@/lib/mcp/oauth'
 import { setSession, takeOAuthPending, getUserId } from '@/lib/session'
 import { logEvent } from '@/lib/mcp/pii'
+import { DEMO_USER_ID } from '@/lib/seed/demo'
 
 /**
  * Повернення з «Сільпо». Обмінюємо code на токен і зберігаємо його
@@ -42,10 +43,19 @@ export async function GET(request: NextRequest) {
       resource: config.silpo.mcpUrl,
     })
 
-    // Прив'язуємо до поточної сесії, якщо вона є, інакше створюємо користувача
+    /**
+     * Прив'язуємо до поточної сесії, якщо вона є, інакше створюємо користувача.
+     *
+     * Виняток — демо-користувач. Він СПІЛЬНИЙ для всіх відвідувачів, тож
+     * прив'язка до нього означала б: людина, яка спершу глянула демо, а потім
+     * увійшла через «Сільпо», віддає свій живий токен у спільний акаунт із
+     * вигаданою історією, а наступний такий самий вхід її токен перезапише.
+     * Для реального входу демо-сесія — не «своя», а чужа.
+     */
     const existingUserId = await getUserId()
-    const user = existingUserId
-      ? await prisma.user.update({ where: { id: existingUserId }, data: { authMode: 'silpo' } })
+    const attachTo = existingUserId === DEMO_USER_ID ? null : existingUserId
+    const user = attachTo
+      ? await prisma.user.update({ where: { id: attachTo }, data: { authMode: 'silpo' } })
       : await prisma.user.create({ data: { displayName: 'Гість «Сільпо»', authMode: 'silpo' } })
 
     await prisma.mcpSession.deleteMany({ where: { userId: user.id } })

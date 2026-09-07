@@ -172,6 +172,7 @@ async function main() {
   await card(page,
     `<img src="/icon-192.png" width="120" height="120" style="border-radius:28px" alt="">` +
     `<div style="color:#fff;font:800 26px/1.2 ${F}">Сільпо: Сімейна комора</div>` +
+    `<div style="color:#d8d8de;font:500 16px/1.4 ${F};max-width:300px">Уже тестується на реальних покупцях «Сільпо»</div>` +
     `<div style="color:#ffb765;font:700 18px/1.3 ${F}">komora.im.pl.ua</div>`)
   await pace(page)
 

@@ -4,6 +4,12 @@ import { BottomNav } from '@/components/BottomNav'
 import { Providers } from './providers'
 
 export const metadata: Metadata = {
+  /**
+   * Без базової адреси Next збирає og:image відносно localhost:3000 — саме
+   * так посилання на прод і виглядало в месенджерах: картинки не було.
+   * Адреса одна, тож константа; форк на іншому домені міняє її тут.
+   */
+  metadataBase: new URL('https://komora.im.pl.ua'),
   title: 'Сільпо: Сімейна комора',
   description:
     'AI-агент, який знає, що є вдома, планує сімейний раціон і формує готовий кошик «Сільпо». Прототип для хакатону AI Factory.',

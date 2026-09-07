@@ -6,6 +6,7 @@ import { logEvent } from '@/lib/mcp/pii'
 import { resetDemoCart } from '@/lib/mcp/mock-adapter'
 import { seedDemoUser, seedRecipes, DEMO_USER_ID } from '@/lib/seed/demo'
 import { seedCommunity } from '@/lib/seed/community'
+import { seedActivity } from '@/lib/seed/activity'
 
 /**
  * Запуск demo-режиму. Створює (або перевикористовує) демонстраційного
@@ -49,6 +50,21 @@ export async function POST() {
     if ((await prisma.userRecipe.count()) === 0) {
       await seedCommunity(prisma)
       logEvent('info', 'community.seeded', {})
+    }
+
+    /**
+     * Історія користування досівається окремо від комори — за ознакою, якої
+     * в старій історії бути не могло. Поле «Де придбали» з'явилось після
+     * того, як демо-акаунт на проді вже мав комору, тож умова «комора
+     * порожня» ніколи б не спрацювала, і п'ята картка мовчала б на показі.
+     * seedActivity ідемпотентний: прибирає власні сліди й пише наново.
+     */
+    const manualWithPlace = await prisma.pantryItem.count({
+      where: { userId: DEMO_USER_ID, source: 'manual', purchasePlace: { not: null } },
+    })
+    if (manualWithPlace === 0 && pantrySize > 0) {
+      await seedActivity(prisma, DEMO_USER_ID)
+      logEvent('info', 'auth.demo_activity_reseeded', {})
     }
 
     /**

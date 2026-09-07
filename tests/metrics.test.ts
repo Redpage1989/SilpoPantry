@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildMetrics, MIN_EVENTS } from '@/lib/domain/metrics'
-import { COOKED_SEED, EATEN_SEED, WASTED_SEED, PROPOSALS_SEED, PURCHASES_SEED } from '@/lib/seed/activity'
+import { COOKED_SEED, COOKED_RECIPES, EATEN_SEED, WASTED_SEED, PROPOSALS_SEED, PURCHASES_SEED } from '@/lib/seed/activity'
+import { SEED_RECIPES } from '@/lib/seed/recipes'
 
 /**
  * Метрики, які пітч називає вголос. Головне правило тут — не показувати
@@ -181,5 +182,20 @@ describe('частка покупок у «Сільпо»', () => {
     const m = share(0, 5)
     expect(m.enough).toBe(true)
     expect(m.value).toBe('0%')
+  })
+})
+
+/**
+ * Історія посилається на справжні рецепти. Перша версія сіду мала дев'ять
+ * вигаданих slug-ів («kuryache-file-ovochi» замість «kuryache-file-z-ovochamy»),
+ * і це не ламало нічого видимого — саме тому й потрібен окремий тест.
+ */
+describe('сідована історія приготованих страв', () => {
+  it('кожна страва існує в книзі рецептів під тією самою назвою', () => {
+    const book = new Map(SEED_RECIPES.map((r) => [r.slug, r.title]))
+    for (const { slug, title } of COOKED_RECIPES) {
+      expect(book.has(slug), `немає рецепту зі slug «${slug}»`).toBe(true)
+      expect(book.get(slug), `назва для «${slug}»`).toBe(title)
+    }
   })
 })

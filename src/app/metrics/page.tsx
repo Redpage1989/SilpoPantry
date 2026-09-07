@@ -21,7 +21,7 @@ export default async function MetricsPage() {
       <header className="mb-4">
         <h1 className="text-[22px] font-semibold tracking-tight text-graphite-900">Що змінилось</h1>
         <p className="mt-1 text-[13px] leading-snug text-graphite-500">
-          Чотири числа, за якими видно, працює агент чи ні. Рахуються з ваших подій —
+          П'ять чисел, за якими видно, працює агент чи ні. Рахуються з ваших подій —
           не з середніх по ринку.
         </p>
       </header>

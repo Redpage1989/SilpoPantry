@@ -23,19 +23,24 @@ import { normalizeProductName, guessCategory } from '@/lib/domain/normalize'
  * знайшлось удома з усіх обовʼязкових. Середнє ≈ 72% — правдоподібно для
  * родини, яка веде комору, але не планує кожну вечерю.
  */
+/**
+ * Slug-и й назви — з книги рецептів, не вигадані: перша версія сіду мала
+ * дев'ять неіснуючих slug-ів, і жоден тест цього не ловив, бо історію читає
+ * лише лічильник метрик. Тест «сідовані страви існують у книзі» тепер є.
+ */
 const COOKED: { slug: string; title: string; fromPantry: number; total: number; daysAgo: number }[] = [
-  { slug: 'frittata-shpynat', title: 'Фрітата зі шпинатом', fromPantry: 5, total: 5, daysAgo: 13 },
+  { slug: 'frytata-zi-shpynatom', title: 'Фрітата зі шпинатом', fromPantry: 5, total: 5, daysAgo: 13 },
   { slug: 'pasta-shpynat-pomidory', title: 'Паста зі шпинатом і помідорами', fromPantry: 3, total: 5, daysAgo: 12 },
-  { slug: 'kuryache-file-ovochi', title: 'Куряче філе з овочами', fromPantry: 4, total: 6, daysAgo: 11 },
-  { slug: 'vivsyanka-frukty', title: 'Вівсянка з фруктами', fromPantry: 2, total: 4, daysAgo: 10 },
-  { slug: 'omlet-syr', title: 'Омлет із сиром', fromPantry: 4, total: 4, daysAgo: 9 },
-  { slug: 'grechka-hryby', title: 'Гречка з грибами', fromPantry: 3, total: 6, daysAgo: 8 },
+  { slug: 'kuryache-file-z-ovochamy', title: 'Куряче філе з овочами на сковороді', fromPantry: 4, total: 6, daysAgo: 11 },
+  { slug: 'vivsianka-z-fruktamy', title: 'Вівсянка з фруктами', fromPantry: 2, total: 4, daysAgo: 10 },
+  { slug: 'omlet-z-pomidoramy', title: 'Омлет з помідорами', fromPantry: 4, total: 4, daysAgo: 9 },
+  { slug: 'hrechka-z-hrybamy', title: 'Гречка з грибами', fromPantry: 3, total: 6, daysAgo: 8 },
   { slug: 'syrnyky', title: 'Сирники', fromPantry: 4, total: 5, daysAgo: 7 },
-  { slug: 'sup-kuryachyi', title: 'Курячий суп', fromPantry: 5, total: 7, daysAgo: 6 },
+  { slug: 'kuriachyi-sup-z-lokshynoiu', title: 'Курячий суп з локшиною', fromPantry: 5, total: 7, daysAgo: 6 },
   { slug: 'deruny', title: 'Деруни', fromPantry: 2, total: 5, daysAgo: 5 },
-  { slug: 'zapikanka-syr', title: 'Запіканка сирна', fromPantry: 4, total: 4, daysAgo: 3 },
-  { slug: 'salat-ovochevyi', title: 'Овочевий салат', fromPantry: 3, total: 4, daysAgo: 2 },
-  { slug: 'pasta-karbonara', title: 'Паста карбонара', fromPantry: 5, total: 6, daysAgo: 1 },
+  { slug: 'syrna-zapikanka', title: 'Сирна запіканка', fromPantry: 4, total: 4, daysAgo: 3 },
+  { slug: 'grecki-salat', title: 'Грецький салат', fromPantry: 3, total: 4, daysAgo: 2 },
+  { slug: 'makarony-z-syrom', title: 'Макарони із сирним соусом', fromPantry: 5, total: 6, daysAgo: 1 },
 ]
 
 /** Спожите вчасно: пішло у страви й не зіпсувалось. */
@@ -96,6 +101,8 @@ function daysAgo(days: number, now: Date): Date {
 
 /** Форма сідованої історії — для тесту, який стереже правдоподібність чисел. */
 export const COOKED_SEED = COOKED.map((c) => ({ fromPantry: c.fromPantry, total: c.total }))
+/** Slug-и й назви сідованих страв — для тесту, що вони існують у книзі. */
+export const COOKED_RECIPES = COOKED.map((c) => ({ slug: c.slug, title: c.title }))
 export const EATEN_SEED = EATEN.length
 export const WASTED_SEED = WASTED.length
 export const PROPOSALS_SEED = PROPOSALS.map((p) => p.addedToCart)

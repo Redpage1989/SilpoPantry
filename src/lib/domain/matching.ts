@@ -6,7 +6,7 @@ import type {
   RecipeLike,
   Kopiyky,
 } from './types'
-import { areUnitsCompatible, toBase, convert } from './units'
+import { toBase, convert, baseUnitOf, unitBridge } from './units'
 import { normalizeProductName, transliterateLatinFoodTerms } from './normalize'
 import { daysUntil, SOON_DAYS } from './pantry'
 
@@ -30,6 +30,7 @@ const FALLBACK_PRICE_PER_BASE_UNIT: Record<string, Kopiyky> = {
 }
 
 const DEFAULT_PRICE_PER_BASE_UNIT: Kopiyky = 15
+
 
 /**
  * Ціна завжди задана за БАЗОВУ одиницю (копійка за г / мл / шт) — і своя
@@ -85,11 +86,20 @@ export function calculateMissingIngredients(
     if (isRequired) requiredCount += 1
 
     const substituteKeys = (ing.substitutes ?? []).map((s) => s.toLowerCase())
+
+    /**
+     * Переведення в базову одиницю ІНГРЕДІЄНТА — з мостом «штука ↔ вага»
+     * для продуктів із PIECE_GRAMS. null означає, що звести неможливо
+     * (упаковка невідомого розміру, вага проти обʼєму) — такий рядок комори
+     * інгредієнт не закриває, як і доти.
+     */
+    const bridge = unitBridge(ing.normalizedName, ing.unit)
+
     const candidates = pantry
       .filter(
         (p) =>
           (p.normalizedName === ing.normalizedName || substituteKeys.includes(p.normalizedName)) &&
-          areUnitsCompatible(p.unit, ing.unit) &&
+          bridge.toBase(1, p.unit) !== null &&
           (remaining.get(p.id) ?? 0) > 0,
       )
       .sort((a, b) => {
@@ -107,10 +117,10 @@ export function calculateMissingIngredients(
 
     for (const item of candidates) {
       if (neededBase <= 0.0001) break
-      const availableBase = toBase(remaining.get(item.id)!, item.unit)
+      const availableBase = bridge.toBase(remaining.get(item.id)!, item.unit)!
       const take = Math.min(neededBase, availableBase)
       if (take <= 0) continue
-      const takeInItemUnit = convert(take, baseUnitOf(item.unit), item.unit)
+      const takeInItemUnit = bridge.fromBase(take, item.unit)
       remaining.set(item.id, remaining.get(item.id)! - takeInItemUnit)
       neededBase -= take
       if (item.normalizedName !== ing.normalizedName) {
@@ -152,12 +162,6 @@ export function calculateMissingIngredients(
     .reduce((sum, m) => sum + m.approxCost, 0)
 
   return { coverage, have, missing, rescues: [...rescues], approxMissingCost }
-}
-
-function baseUnitOf(unit: string): 'г' | 'мл' | 'шт' {
-  if (unit === 'шт') return 'шт'
-  if (unit === 'г' || unit === 'кг' || unit === 'пуч') return 'г'
-  return 'мл'
 }
 
 function round2(n: number): number {

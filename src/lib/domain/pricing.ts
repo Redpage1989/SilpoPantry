@@ -1,5 +1,5 @@
 import type { Kopiyky, MissingIngredient, ProductOption, ProductTier, Unit } from './types'
-import { toBase, areUnitsCompatible } from './units'
+import { toBase, areUnitsCompatible, unitBridge } from './units'
 import { formatUah, pluralize } from './scoring'
 
 export { formatUah, pluralize }
@@ -32,13 +32,25 @@ export function weightStepGrams(pack: ProductOption): number | null {
  * Скільки упаковок (для вагових — кроків ваги) треба, щоб покрити потребу.
  * Упаковку не ділять, крок ваги — теж.
  *
- * Якщо виміри несумісні (рецепт у мл, товар у грамах) — не рахуємо
- * псевдочисло, а чесно повертаємо одну упаковку: краще недооцінити,
+ * Потребу зводимо до одиниці товару через `unitBridge` — той самий міст
+ * «штука ↔ вага», що й у підрахунку нестачі та списанні з комори. Без нього
+ * «4 шт цибулі» перетворювались на ОДИН крок ваги (часто 100–200 г замість
+ * ~400 г), бо «шт» і «г» — різні виміри, а «Сільпо» віддає цибулю, моркву,
+ * картоплю й помідори саме вагою.
+ *
+ * Там, де мосту немає (упаковка невідомого розміру `уп`, маса проти обʼєму,
+ * продукт без середньої ваги штуки), лишається старе правило: не рахуємо
+ * псевдочисло, а чесно повертаємо одну упаковку — краще недооцінити,
  * ніж покласти людині в кошик 2 пачки кави замість однієї.
  */
-export function packsNeeded(missingQty: number, missingUnit: Unit, pack: ProductOption): number {
-  if (!areUnitsCompatible(missingUnit, pack.unit)) return 1
-  const needBase = toBase(missingQty, missingUnit)
+export function packsNeeded(
+  missingQty: number,
+  missingUnit: Unit,
+  pack: ProductOption,
+  normalizedName: string,
+): number {
+  const needBase = unitBridge(normalizedName, pack.unit).toBase(missingQty, missingUnit)
+  if (needBase === null) return 1
   const packBase = toBase(pack.packSize, pack.unit)
   if (packBase <= 0) return 1
   return Math.max(1, Math.ceil(needBase / packBase))
@@ -48,11 +60,19 @@ export function packsNeeded(missingQty: number, missingUnit: Unit, pack: Product
  * Чи змусив мінімальний крок узяти більше, ніж вимагає рецепт.
  * Потрібно лише для пояснення в інтерфейсі — на розрахунок не впливає.
  */
-export function isBelowWeightMinimum(missingQty: number, missingUnit: Unit, pack: ProductOption): boolean {
+export function isBelowWeightMinimum(
+  missingQty: number,
+  missingUnit: Unit,
+  pack: ProductOption,
+  normalizedName: string,
+): boolean {
   const step = weightStepGrams(pack)
   if (step === null) return false
-  if (!areUnitsCompatible(missingUnit, pack.unit)) return false
-  return toBase(missingQty, missingUnit) < step
+  // той самий міст, що й у packsNeeded: інакше рядок «4 шт цибулі» не отримував
+  // позначки взагалі, хоча саме там розбіжність із рецептом найпомітніша
+  const needBase = unitBridge(normalizedName, pack.unit).toBase(missingQty, missingUnit)
+  if (needBase === null) return false
+  return needBase < step
 }
 
 /** За скільки грамів «Сільпо» показує ціну вагового товару. */
@@ -98,9 +118,17 @@ export function cartQuantity(pack: ProductOption, packs: number): number {
  * без цього порівняння «готувати vs купити готове» завжди
  * програвало б через пачку кави на 250 г заради 30 г.
  */
-export function consumedFraction(missingQty: number, missingUnit: Unit, pack: ProductOption, packs: number): number {
-  if (!areUnitsCompatible(missingUnit, pack.unit)) return 1
-  const needBase = toBase(missingQty, missingUnit)
+export function consumedFraction(
+  missingQty: number,
+  missingUnit: Unit,
+  pack: ProductOption,
+  packs: number,
+  normalizedName: string,
+): number {
+  // той самий міст, що й у packsNeeded: інакше два кроки цибулі на три
+  // цибулини звітували б «спожито все», і залишок зникав із порівняння
+  const needBase = unitBridge(normalizedName, pack.unit).toBase(missingQty, missingUnit)
+  if (needBase === null) return 1
   const boughtBase = toBase(pack.packSize, pack.unit) * packs
   if (boughtBase <= 0) return 1
   return Math.max(0, Math.min(1, needBase / boughtBase))
@@ -151,7 +179,9 @@ export function buildTiers(options: ProductOption[], missing: MissingIngredient)
    */
   const comparable = options.every((p) => areUnitsCompatible(p.unit, options[0].unit))
   const rank = (p: ProductOption) =>
-    comparable ? pricePerBaseUnit(p) : effectivePrice(p) * packsNeeded(missing.missing, missing.unit, p)
+    comparable
+      ? pricePerBaseUnit(p)
+      : effectivePrice(p) * packsNeeded(missing.missing, missing.unit, p, missing.normalizedName)
 
   const withUnitPrice = options
     .map((p) => ({ p, unitPrice: rank(p) }))
@@ -219,10 +249,10 @@ export function buildTiers(options: ProductOption[], missing: MissingIngredient)
   })
 
   return unique.map(({ tier, product, rationale }) => {
-    const quantity = packsNeeded(missing.missing, missing.unit, product)
+    const quantity = packsNeeded(missing.missing, missing.unit, product, missing.normalizedName)
     const unitEffective = effectivePrice(product)
     const lineTotal = unitEffective * quantity
-    const fraction = consumedFraction(missing.missing, missing.unit, product, quantity)
+    const fraction = consumedFraction(missing.missing, missing.unit, product, quantity, missing.normalizedName)
     const consumedValue = Math.round(lineTotal * fraction)
     return {
       tier,

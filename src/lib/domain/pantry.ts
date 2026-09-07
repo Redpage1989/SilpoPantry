@@ -1,5 +1,5 @@
 import type { PantryEntry, Unit, RecipeIngredient } from './types'
-import { convert, tryConvert, areUnitsCompatible, toBase } from './units'
+import { convert, tryConvert, toBase, baseUnitOf, unitBridge } from './units'
 import { normalizeProductName } from './normalize'
 
 /** Скільки днів до псування вважаємо «терміново». */
@@ -111,18 +111,25 @@ export function planDeduction(
   for (const ing of ingredients) {
     if (ing.optional) continue
     let needBase = toBase(ing.quantity * servingsMultiplier, ing.unit)
+    /**
+     * Той самий міст «штука ↔ вага», що й у підрахунку нестачі. Без нього
+     * екран рецепта казав «цибуля є вдома» (там міст уже був), а списання
+     * після «Я це приготував» цей самий кілограм не бачило й звітувало про
+     * нестачу — комора лишалась із товаром, який родина щойно зʼїла.
+     */
+    const bridge = unitBridge(ing.normalizedName, ing.unit)
     const { direct, substitutes } = findPantryMatches(items, ing)
     const candidates = [...direct, ...substitutes]
-      .filter((i) => areUnitsCompatible(i.unit, ing.unit))
+      .filter((i) => bridge.toBase(1, i.unit) !== null)
       .sort(byExpiryThenOldest(now))
 
     for (const item of candidates) {
       if (needBase <= 0.0001) break
       const availableInItem = remaining.get(item.id) ?? 0
       if (availableInItem <= 0) continue
-      const availableBase = toBase(availableInItem, item.unit)
+      const availableBase = bridge.toBase(availableInItem, item.unit)!
       const takeBase = Math.min(needBase, availableBase)
-      const takeInItemUnit = convert(takeBase, baseUnitFor(item.unit), item.unit)
+      const takeInItemUnit = bridge.fromBase(takeBase, item.unit)
       const left = round3(availableInItem - takeInItemUnit)
       remaining.set(item.id, left)
       plan.push({
@@ -139,18 +146,13 @@ export function planDeduction(
     if (needBase > 0.0001) {
       shortfall.push({
         normalizedName: ing.normalizedName,
-        missing: round3(convert(needBase, baseUnitFor(ing.unit), ing.unit)),
+        missing: round3(convert(needBase, baseUnitOf(ing.unit) as Unit, ing.unit)),
         unit: ing.unit,
       })
     }
   }
 
   return { plan, shortfall }
-}
-
-function baseUnitFor(unit: Unit): Unit {
-  const dim = unit === 'шт' ? 'count' : unit === 'г' || unit === 'кг' || unit === 'пуч' ? 'mass' : 'volume'
-  return dim === 'mass' ? 'г' : dim === 'volume' ? 'мл' : 'шт'
 }
 
 function byExpiryThenOldest(now: Date) {

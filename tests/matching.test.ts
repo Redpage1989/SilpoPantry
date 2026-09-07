@@ -187,3 +187,45 @@ describe('орієнтовна вартість докупівлі', () => {
     expect(res.missing[0].approxCost).toBe(3000) // 1000 г × 3 коп = 30,00 грн
   })
 })
+
+/**
+ * Регресія з живого користування: людина додала цибулю вручну («1 кг»),
+ * а рецепт далі писав «цибулі немає» й пропонував докупити. Виміри маси
+ * й штук не змішувались, а «Сільпо» віддає цибулю саме вагою — тож те
+ * саме ламало й імпорт чеків.
+ */
+describe('міст «штука ↔ вага»', () => {
+  const recipe = (normalizedName: string, quantity: number, unit: 'г' | 'шт'): RecipeLike => ({
+    ...RECIPE,
+    ingredients: [{ name: normalizedName, normalizedName, quantity, unit, approxPricePerUnit: 8 }],
+  })
+  const cover = (r: RecipeLike, rows: Partial<PantryEntry>[]) =>
+    calculateMissingIngredients(r, pantry(rows), { now: NOW })
+
+  it('вага вдома закриває рецепт у штуках', () => {
+    const r = cover(recipe('цибуля', 2, 'шт'), [{ normalizedName: 'цибуля', quantity: 1, unit: 'кг' }])
+    expect(r.missing).toHaveLength(0)
+    expect(r.coverage).toBe(1)
+  })
+
+  it('штуки вдома закривають рецепт у грамах', () => {
+    const r = cover(recipe('картопля', 400, 'г'), [{ normalizedName: 'картопля', quantity: 5, unit: 'шт' }])
+    expect(r.missing).toHaveLength(0)
+  })
+
+  it('часткова вага дає нестачу, а не «немає»', () => {
+    const r = cover(recipe('цибуля', 4, 'шт'), [{ normalizedName: 'цибуля', quantity: 150, unit: 'г' }])
+    expect(r.missing[0].kind).toBe('insufficient')
+    expect(r.missing[0].missing).toBe(2.5)
+  })
+
+  it('міст не вигадує зв’язок там, де ваги штуки немає', () => {
+    const r = cover(recipe('макарони', 200, 'г'), [{ normalizedName: 'макарони', quantity: 2, unit: 'шт' }])
+    expect(r.missing[0].kind).toBe('absent')
+  })
+
+  it('упаковка невідомого розміру нічого не закриває', () => {
+    const r = cover(recipe('цибуля', 1, 'шт'), [{ normalizedName: 'цибуля', quantity: 3, unit: 'уп' }])
+    expect(r.missing[0].kind).toBe('absent')
+  })
+})

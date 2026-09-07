@@ -53,19 +53,19 @@ describe('ціни', () => {
   })
 
   it('упаковки не діляться: 250 г потреби з пачки 200 г = 2 пачки', () => {
-    expect(packsNeeded(250, 'г', product({ productId: 'p', packSize: 200, unit: 'г' }))).toBe(2)
-    expect(packsNeeded(150, 'г', product({ productId: 'p', packSize: 200, unit: 'г' }))).toBe(1)
+    expect(packsNeeded(250, 'г', product({ productId: 'p', packSize: 200, unit: 'г' }), 'маскарпоне')).toBe(2)
+    expect(packsNeeded(150, 'г', product({ productId: 'p', packSize: 200, unit: 'г' }), 'маскарпоне')).toBe(1)
   })
 
   it('несумісні одиниці не дають вигаданої кількості упаковок', () => {
     // 300 мл кави проти пачки 250 г — не рахуємо 2 пачки
-    expect(packsNeeded(300, 'мл', product({ productId: 'coffee', packSize: 250, unit: 'г' }))).toBe(1)
+    expect(packsNeeded(300, 'мл', product({ productId: 'coffee', packSize: 250, unit: 'г' }), 'кава')).toBe(1)
   })
 
   it('спожита частка показує, скільки з пачки піде у страву', () => {
     const pack = product({ productId: 'cocoa', packSize: 100, unit: 'г' })
-    expect(consumedFraction(20, 'г', pack, 1)).toBe(0.2)
-    expect(consumedFraction(200, 'г', pack, 2)).toBe(1)
+    expect(consumedFraction(20, 'г', pack, 1, 'какао')).toBe(0.2)
+    expect(consumedFraction(200, 'г', pack, 2, 'какао')).toBe(1)
   })
 })
 
@@ -267,22 +267,22 @@ describe('вагові товари: крок ваги з каталогу і о
   it('мінімум дорівнює кроку товару, а не спільному числу', () => {
     for (const step of REAL_STEPS) {
       // рецепту треба 20 г — беремо рівно один крок, яким би він не був
-      expect(packsNeeded(20, 'г', weighed(step))).toBe(1)
+      expect(packsNeeded(20, 'г', weighed(step), 'сир твердий')).toBe(1)
       expect(cartQuantity(weighed(step), 1)).toBeCloseTo(step / 1000, 5)
     }
   })
 
   it('20 г пармезану неможливо замовити — мінімум задає крок сиру', () => {
     const parmesan = weighed(200)
-    expect(packsNeeded(20, 'г', parmesan)).toBe(1)
+    expect(packsNeeded(20, 'г', parmesan, 'сир твердий')).toBe(1)
     expect(cartQuantity(parmesan, 1)).toBe(0.2)
-    expect(isBelowWeightMinimum(20, 'г', parmesan)).toBe(true)
+    expect(isBelowWeightMinimum(20, 'г', parmesan, 'сир твердий')).toBe(true)
   })
 
   it('потреба більша за крок — округлюємо вгору до цілих кроків', () => {
-    expect(packsNeeded(500, 'г', weighed(100))).toBe(5)
-    expect(packsNeeded(510, 'г', weighed(100))).toBe(6)
-    expect(packsNeeded(250, 'г', weighed(50))).toBe(5)
+    expect(packsNeeded(500, 'г', weighed(100), 'сир твердий')).toBe(5)
+    expect(packsNeeded(510, 'г', weighed(100), 'сир твердий')).toBe(6)
+    expect(packsNeeded(250, 'г', weighed(50), 'сир твердий')).toBe(5)
   })
 
   it('у кошик іде вага в кілограмах, а не кількість кроків', () => {
@@ -306,19 +306,19 @@ describe('вагові товари: крок ваги з каталогу і о
   it('штучний товар лишається штучним: кількість упаковок як є', () => {
     const packaged = product({ productId: 'p', packSize: 200, unit: 'г' })
     expect(cartQuantity(packaged, 2)).toBe(2)
-    expect(packsNeeded(20, 'г', packaged)).toBe(1)
-    expect(isBelowWeightMinimum(20, 'г', packaged)).toBe(false)
+    expect(packsNeeded(20, 'г', packaged, 'сир твердий')).toBe(1)
+    expect(isBelowWeightMinimum(20, 'г', packaged, 'сир твердий')).toBe(false)
   })
 
   it('позначка про мінімум зникає, коли потреба перевищила крок', () => {
-    expect(isBelowWeightMinimum(500, 'г', weighed(100))).toBe(false)
-    expect(isBelowWeightMinimum(99, 'г', weighed(100))).toBe(true)
+    expect(isBelowWeightMinimum(500, 'г', weighed(100), 'сир твердий')).toBe(false)
+    expect(isBelowWeightMinimum(99, 'г', weighed(100), 'сир твердий')).toBe(true)
   })
 
   it('несумісні одиниці не дають вигаданої ваги', () => {
     // рецепт у мілілітрах, товар ваговий у грамах — рахувати нічого
-    expect(packsNeeded(30, 'мл', weighed(100))).toBe(1)
-    expect(isBelowWeightMinimum(30, 'мл', weighed(100))).toBe(false)
+    expect(packsNeeded(30, 'мл', weighed(100), 'сир твердий')).toBe(1)
+    expect(isBelowWeightMinimum(30, 'мл', weighed(100), 'сир твердий')).toBe(false)
   })
 })
 
@@ -650,5 +650,81 @@ describe('rationale преміального не обіцяє метрики, �
       need,
     )
     expect(tiers.find((t) => t.tier === 'premium')!.rationale).not.toContain('100 г')
+  })
+})
+
+/**
+ * Міст «штука ↔ вага» в кошику.
+ *
+ * «Сільпо» відпускає цибулю, моркву, картоплю й помідори вагою, а рецепти
+ * міряють їх штуками. Доти виміри в pricing не змішувались, і «4 шт цибулі»
+ * клали в кошик ОДИН крок ваги — часто 100–200 г замість ~400 г. Той самий
+ * розрив глушив і позначку про мінімальну вагу: рядок ніколи її не отримував.
+ *
+ * Міст тут той самий, що в підрахунку нестачі та списанні з комори
+ * (`unitBridge`), — інакше три місця розійшлися б у показаннях.
+ */
+describe('кошик: штуки рецепта проти ваги товару', () => {
+  const weighed = (stepGrams: number) =>
+    product({ productId: 'w', packSize: stepGrams, unit: 'г', weighted: true })
+
+  it('4 шт цибулі — це ~400 г, а не один крок ваги', () => {
+    expect(packsNeeded(4, 'шт', weighed(200), 'цибуля')).toBe(2)
+    expect(packsNeeded(4, 'шт', weighed(100), 'цибуля')).toBe(4)
+  })
+
+  it('міст працює і в зворотний бік: вага рецепта → штучний товар', () => {
+    const perPiece = product({ productId: 'potato', packSize: 1, unit: 'шт' })
+    // 500 г картоплі ≈ 4,17 бульби — упаковку не ділять, отже 5
+    expect(packsNeeded(500, 'г', perPiece, 'картопля')).toBe(5)
+  })
+
+  it('позначка про мінімум спрацьовує й для потреби у штуках', () => {
+    // 1 цибулина ≈ 100 г, а товар відпускають кратно 200 г
+    expect(isBelowWeightMinimum(1, 'шт', weighed(200), 'цибуля')).toBe(true)
+    expect(isBelowWeightMinimum(4, 'шт', weighed(200), 'цибуля')).toBe(false)
+  })
+
+  it('без мосту поведінка не змінюється: маскарпоне штуками не міряють', () => {
+    expect(packsNeeded(4, 'шт', weighed(200), 'маскарпоне')).toBe(1)
+    expect(isBelowWeightMinimum(4, 'шт', weighed(200), 'маскарпоне')).toBe(false)
+  })
+
+  it('упаковка невідомого розміру лишається однією упаковкою', () => {
+    const box = product({ productId: 'box', packSize: 1, unit: 'уп' })
+    expect(packsNeeded(4, 'шт', box, 'цибуля')).toBe(1)
+  })
+
+  it('маса проти обʼєму лишається несумісною навіть для рахованих продуктів', () => {
+    expect(packsNeeded(300, 'мл', weighed(250), 'помідори')).toBe(1)
+    expect(isBelowWeightMinimum(300, 'мл', weighed(250), 'помідори')).toBe(false)
+  })
+
+  it('спожита частка теж іде через міст: залишок не ховається', () => {
+    // 3 цибулини ≈ 300 г, куплено два кроки по 200 г — чверть лишається вдома
+    expect(consumedFraction(3, 'шт', weighed(200), 2, 'цибуля')).toBe(0.75)
+    // без мосту — як і доти, вважаємо, що спожито все
+    expect(consumedFraction(3, 'шт', weighed(200), 2, 'маскарпоне')).toBe(1)
+  })
+
+  it('цінові рівні показують залишок для штучної потреби', () => {
+    const need = missing({ name: 'Цибуля', normalizedName: 'цибуля', needed: 3, have: 0, missing: 3, unit: 'шт', kind: 'absent' })
+    const [tier] = buildTiers([product({ productId: 'onion', packSize: 200, unit: 'г', weighted: true, price: 1000 })], need)
+    expect(tier.quantity).toBe(2)
+    expect(tier.leftoverValue).toBe(500)
+  })
+
+  it('цінові рівні беруть ту саму кількість, що й кошик', () => {
+    const need = missing({
+      name: 'Цибуля',
+      normalizedName: 'цибуля',
+      needed: 4,
+      have: 0,
+      missing: 4,
+      unit: 'шт',
+      kind: 'absent',
+    })
+    const tiers = buildTiers([product({ productId: 'onion', packSize: 200, unit: 'г', weighted: true })], need)
+    expect(tiers[0].quantity).toBe(2)
   })
 })

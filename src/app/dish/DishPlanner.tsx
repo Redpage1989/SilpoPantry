@@ -355,7 +355,7 @@ export function DishPlanner({ initialQuery, initialServings }: { initialQuery: s
                                 )}
                                 <div className="mt-1 text-[11px] text-graphite-500">{t.rationale}</div>
                                 {/* Інакше людина бачить у кошику більше, ніж у рецепті, і не розуміє чому */}
-                                {isBelowWeightMinimum(c.ingredient.missing, c.ingredient.unit, t.product) && (
+                                {isBelowWeightMinimum(c.ingredient.missing, c.ingredient.unit, t.product, c.ingredient.normalizedName) && (
                                   <div className="mt-1 text-[11px] text-graphite-500">
                                     ⚖️ Рецепту треба {formatQuantity(c.ingredient.missing, c.ingredient.unit)}, але
                                     цей товар відпускають кратно{' '}

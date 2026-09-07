@@ -130,6 +130,25 @@ describe('списання інгредієнтів після приготув�
     expect(plan[1].remaining).toBeCloseTo(0.3, 3)
   })
 
+  /**
+   * Той самий міст «штука ↔ вага», що й у підрахунку нестачі. Доти екран
+   * рецепта казав «цибуля є вдома», а списання після приготування її не
+   * бачило — кілограм лишався в коморі назавжди.
+   */
+  it('списує вагову цибулю під рецепт у штуках', () => {
+    const items = [item({ id: 'a', normalizedName: 'цибуля', quantity: 1, unit: 'кг' })]
+    const { plan, shortfall } = planDeduction(items, [ing('цибуля', 2, 'шт')], 1, NOW)
+    expect(shortfall).toHaveLength(0)
+    expect(plan[0]).toMatchObject({ itemId: 'a', unit: 'кг', deducted: 0.2 })
+    expect(plan[0].remaining).toBeCloseTo(0.8, 3)
+  })
+
+  it('не вигадує міст там, де ваги штуки немає', () => {
+    const items = [item({ id: 'a', normalizedName: 'макарони', quantity: 2, unit: 'шт' })]
+    const { shortfall } = planDeduction(items, [ing('макарони', 200, 'г')], 1, NOW)
+    expect(shortfall).toHaveLength(1)
+  })
+
   it('масштабує списання під кількість порцій', () => {
     const items = [item({ id: 'a', normalizedName: 'яйця', quantity: 6, unit: 'шт' })]
     const { plan } = planDeduction(items, [ing('яйця', 2, 'шт')], 2, NOW)

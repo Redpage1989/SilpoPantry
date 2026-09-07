@@ -28,10 +28,16 @@ export interface MetricsInput {
   proposals: { total: number; addedToCart: number }
   /** скільки днів минуло від першої події користувача */
   daysObserved: number
+  /**
+   * Де куплено те, що людина додала руками: скільки позицій із «Сільпо»
+   * і скільки всього з відомим місцем. Чеки сюди не входять — вони за
+   * визначенням «Сільпо» і зробили б показник завжди майже стовідсотковим.
+   */
+  purchases: { silpo: number; known: number }
 }
 
 export interface MetricCard {
-  key: 'cookedFromPantry' | 'eatenInTime' | 'adviceToCart' | 'retention'
+  key: 'cookedFromPantry' | 'eatenInTime' | 'adviceToCart' | 'silpoShare' | 'retention'
   label: string
   /** null — даних замало; вигадувати число не можна */
   value: string | null
@@ -68,6 +74,8 @@ export function buildMetrics(input: MetricsInput): MetricCard[] {
 
   const proposalsEnough = input.proposals.total >= MIN_EVENTS
 
+  const purchasesEnough = input.purchases.known >= MIN_EVENTS
+
   const daysLeft = RETENTION_DAYS - input.daysObserved
 
   return [
@@ -97,6 +105,22 @@ export function buildMetrics(input: MetricsInput): MetricCard[] {
         ? `${input.proposals.addedToCart} із ${input.proposals.total} пропозицій підтверджено`
         : need(input.proposals.total),
       enough: proposalsEnough,
+    },
+    {
+      /**
+       * Рахується лише з ручних додавань: там людина сама каже, де купила.
+       * Знаменник — позиції з відомим місцем, а не вся комора: фото полиці
+       * про магазин не знає, і зараховувати його кудись означало б підганяти
+       * показник. Саме тому метрика вимірює те, заради чого й задумана — чи
+       * меншає частка закупів повз «Сільпо».
+       */
+      key: 'silpoShare',
+      label: 'Куплено в «Сільпо», а не деінде',
+      value: purchasesEnough ? percent(input.purchases.silpo, input.purchases.known) : null,
+      hint: purchasesEnough
+        ? `${input.purchases.silpo} із ${input.purchases.known} доданих вручну`
+        : need(input.purchases.known),
+      enough: purchasesEnough,
     },
     {
       key: 'retention',

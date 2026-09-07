@@ -11,7 +11,7 @@ import { buildMetrics } from '@/lib/domain/metrics'
  */
 export async function GET(request: Request) {
   return handle(request, {}, async (userId) => {
-    const [meals, eaten, wasted, proposals, addedToCart, first, firstMeal] = await Promise.all([
+    const [meals, eaten, wasted, proposals, addedToCart, placeKnown, placeSilpo, first, firstMeal] = await Promise.all([
       prisma.cookedMeal.findMany({
         where: { userId },
         select: { fromPantry: true, total: true },
@@ -22,6 +22,13 @@ export async function GET(request: Request) {
       prisma.pantryItem.count({ where: { userId, disposal: 'wasted' } }),
       prisma.shoppingProposal.count({ where: { userId } }),
       prisma.shoppingProposal.count({ where: { userId, status: 'added_to_cart' } }),
+      /**
+       * Знаменник частки — лише позиції з відомим місцем покупки, тобто
+       * додані вручну. Чеки «Сільпо» тут не рахуються: вони завжди «Сільпо»
+       * і зробили б показник декоративним.
+       */
+      prisma.pantryItem.count({ where: { userId, source: 'manual', purchasePlace: { not: null } } }),
+      prisma.pantryItem.count({ where: { userId, source: 'manual', purchasePlace: 'silpo' } }),
       /**
        * Точка відліку — найстаріша ПОДІЯ, а не дата створення акаунта:
        * демо-користувач існує з першого деплою, і від нього «днів
@@ -54,6 +61,7 @@ export async function GET(request: Request) {
         cooked: meals,
         disposals: { eaten, wasted },
         proposals: { total: proposals, addedToCart },
+        purchases: { silpo: placeSilpo, known: placeKnown },
         daysObserved,
       }),
       daysObserved,

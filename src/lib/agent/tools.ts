@@ -9,6 +9,7 @@ import { rankRecipes, formatUah } from '@/lib/domain/scoring'
 import { buildTiers, compareCookVsReady, sumBasket, estimateServingsPerPack, cartQuantity } from '@/lib/domain/pricing'
 import { findExpiringProducts, planDeduction, estimateDaysOfFood, expiryStatus, planPantryWrite } from '@/lib/domain/pantry'
 import { checkProductAgainstRestrictions } from '@/lib/domain/restrictions'
+import { PURCHASE_PLACES } from '@/lib/domain/types'
 import { SEED_RECIPES } from '@/lib/seed/recipes'
 import { toRecipeLike } from '@/lib/domain/user-recipes'
 import { buildWeeklyPlan, countMeals, describePlan, type WeeklyPlan } from '@/lib/domain/mealplan'
@@ -286,6 +287,8 @@ export const UpdatePantryInput = z.object({
         storageLocation: z.string().default('other'),
         source: z.enum(['photo', 'manual', 'online_order', 'offline_receipt', 'previous_cart']),
         confidence: z.number().min(0).max(1).default(1),
+        /** де куплено — питається лише при ручному додаванні */
+        purchasePlace: z.enum(PURCHASE_PLACES).nullable().optional(),
       }),
     )
     .max(60),
@@ -321,6 +324,16 @@ export async function updatePantryInventory(
         storageLocation: item.storageLocation,
         source: item.source,
         confidence: item.confidence,
+        /**
+         * Чеки «Сільпо» — за визначенням «Сільпо»; фото полиці про магазин
+         * не знає й лишається null. Питаємо тільки там, де людина справді
+         * може відповісти.
+         */
+        purchasePlace:
+          item.purchasePlace ??
+          (item.source === 'offline_receipt' || item.source === 'online_order' || item.source === 'previous_cart'
+            ? 'silpo'
+            : null),
         // користувач щойно підтвердив — прапорець знімаємо
         needsConfirmation: false,
       }

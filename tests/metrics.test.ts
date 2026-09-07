@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildMetrics, MIN_EVENTS } from '@/lib/domain/metrics'
-import { COOKED_SEED, EATEN_SEED, WASTED_SEED, PROPOSALS_SEED } from '@/lib/seed/activity'
+import { COOKED_SEED, EATEN_SEED, WASTED_SEED, PROPOSALS_SEED, PURCHASES_SEED } from '@/lib/seed/activity'
 
 /**
  * Метрики, які пітч називає вголос. Головне правило тут — не показувати
@@ -13,6 +13,7 @@ const empty = {
   cooked: [],
   disposals: { eaten: 0, wasted: 0 },
   proposals: { total: 0, addedToCart: 0 },
+  purchases: { silpo: 0, known: 0 },
   daysObserved: 0,
 }
 
@@ -109,6 +110,7 @@ describe('buildMetrics', () => {
       cooked: Array.from({ length: 40 }, () => ({ fromPantry: 3, total: 4 })),
       disposals: { eaten: 40, wasted: 2 },
       proposals: { total: 30, addedToCart: 20 },
+      purchases: { silpo: 20, known: 25 },
       daysObserved: 7,
     })
     const retention = m.find((x) => x.key === 'retention')!
@@ -128,6 +130,7 @@ describe('buildMetrics', () => {
       'cookedFromPantry',
       'eatenInTime',
       'adviceToCart',
+      'silpoShare',
       'retention',
     ])
   })
@@ -139,19 +142,44 @@ describe('сідована історія демо', () => {
    * розуміє, ЩО застосунок міряє. Але числа мають лишатись правдоподібними —
    * 100% скрізь виглядало б як реклама, а не як вимірювання.
    */
-  it('сідованої історії досить для трьох метрик, і жодна не ідеальна', () => {
+  it('сідованої історії досить для чотирьох метрик, і жодна не ідеальна', () => {
     const m = buildMetrics({
       cooked: COOKED_SEED,
       disposals: { eaten: EATEN_SEED, wasted: WASTED_SEED },
       proposals: { total: PROPOSALS_SEED.length, addedToCart: PROPOSALS_SEED.filter(Boolean).length },
+      purchases: { silpo: PURCHASES_SEED.silpo, known: PURCHASES_SEED.known },
       daysObserved: 14,
     })
-    for (const key of ['cookedFromPantry', 'eatenInTime', 'adviceToCart']) {
+    for (const key of ['cookedFromPantry', 'eatenInTime', 'adviceToCart', 'silpoShare']) {
       const card = m.find((x) => x.key === key)!
       expect(card.enough, `${key} має бути порахованим`).toBe(true)
       expect(card.value).toMatch(/^\d+%$/)
       expect(card.value, `${key}: 100% виглядає як реклама`).not.toBe('100%')
     }
     expect(m.find((x) => x.key === 'retention')!.value).toBeNull()
+  })
+})
+
+describe('частка покупок у «Сільпо»', () => {
+  const share = (silpo: number, known: number) =>
+    buildMetrics({ ...empty, purchases: { silpo, known } }).find((x) => x.key === 'silpoShare')!
+
+  it('мовчить, поки ручних додавань менше за поріг', () => {
+    const m = share(1, 2)
+    expect(m.enough).toBe(false)
+    expect(m.value).toBeNull()
+  })
+
+  it('рахує частку від позицій з відомим місцем', () => {
+    const m = share(3, 4)
+    expect(m.enough).toBe(true)
+    expect(m.value).toBe('75%')
+    expect(m.hint).toContain('3 із 4')
+  })
+
+  it('нуль закупів у «Сільпо» — теж чесний результат, а не мовчання', () => {
+    const m = share(0, 5)
+    expect(m.enough).toBe(true)
+    expect(m.value).toBe('0%')
   })
 })

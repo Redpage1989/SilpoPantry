@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button, Card, InfoNote } from '@/components/ui'
 import { apiPut, apiPost, ApiError } from '@/lib/client'
+import { guessCategory } from '@/lib/domain/normalize'
+import { PURCHASE_PLACES, PURCHASE_PLACE_LABELS, type PurchasePlace } from '@/lib/domain/types'
 
 interface ImportResult {
   imported: number
@@ -79,6 +81,7 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
   const [quantity, setQuantity] = useState('1')
   const [unit, setUnit] = useState<'г' | 'кг' | 'мл' | 'л' | 'шт'>('шт')
   const [expiry, setExpiry] = useState('')
+  const [place, setPlace] = useState<PurchasePlace>('silpo')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -87,6 +90,7 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
     if (!name.trim()) return
     setBusy(true)
     setError(null)
+    const guess = guessCategory(name.trim())
     try {
       await apiPost('/api/pantry', {
         confirmationToken: `manual-${Date.now()}`,
@@ -98,8 +102,13 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
             expiryDate: expiry ? new Date(expiry).toISOString() : null,
             source: 'manual',
             confidence: 1,
-            category: 'Інше',
-            storageLocation: 'other',
+            // категорію й полицю вгадуємо тим самим довідником, що й імпорт
+            // чеків: доти будь-що додане вручну падало в «Інше» на полицю
+            // «інше», тож цибуля не потрапляла до овочів і не діставала
+            // терміну придатності
+            category: guess.category,
+            storageLocation: guess.storageLocation,
+            purchasePlace: place,
           },
         ],
         removeIds: [],
@@ -169,6 +178,26 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
             onChange={(e) => setExpiry(e.target.value)}
             className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-4 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
           />
+        </div>
+        <div>
+          <label htmlFor="m-place" className="text-[12px] font-medium text-graphite-700">
+            Де придбали
+          </label>
+          <select
+            id="m-place"
+            value={place}
+            onChange={(e) => setPlace(e.target.value as PurchasePlace)}
+            className="mt-1 min-h-[46px] w-full rounded-2xl bg-cream-100 px-3 text-[15px] outline-none focus:ring-2 focus:ring-accent-700"
+          >
+            {PURCHASE_PLACES.map((p) => (
+              <option key={p} value={p}>
+                {PURCHASE_PLACE_LABELS[p]}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-graphite-300">
+            Показує на екрані «Що змінилось», яка частка покупок іде повз «Сільпо».
+          </p>
         </div>
         {error && <div className="text-[13px] text-danger-700">{error}</div>}
         <Button type="submit" full disabled={busy}>

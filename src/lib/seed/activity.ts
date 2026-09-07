@@ -53,6 +53,30 @@ const EATEN = [
  */
 const WASTED = ['Салат айсберг', 'Кефір 2,5%', 'Петрушка']
 
+/**
+ * Додане руками — з місцем покупки. Назви навмисно НЕ перетинаються з
+ * демо-коморою й чеками: «Цукор» і «Кава» тут уже були з чеків у грамах, і
+ * ручна «1 шт» лягала другим рядком — e2e-інваріант «однакові продукти
+ * окремими рядками» упіймав це першим прогоном. Саме звідси береться четверта метрика:
+ * чи меншає частка закупів повз «Сільпо». Дев'ять із дванадцяти — 75%:
+ * родина ходить у «Сільпо», але хліб бере в пекарні біля дому, а зелень
+ * влітку зі свого городу. Ставити 100% було б рекламою, а не вимірюванням.
+ */
+const MANUAL: { name: string; place: 'silpo' | 'other_store' | 'market' | 'own' }[] = [
+  { name: 'Сіль кухонна', place: 'silpo' },
+  { name: 'Олія соняшникова', place: 'silpo' },
+  { name: 'Сода харчова', place: 'silpo' },
+  { name: 'Борошно пшеничне', place: 'silpo' },
+  { name: 'Рис довгозернистий', place: 'silpo' },
+  { name: 'Чай чорний', place: 'silpo' },
+  { name: 'Крохмаль картопляний', place: 'silpo' },
+  { name: 'Спеції суміш', place: 'silpo' },
+  { name: 'Оцет яблучний', place: 'silpo' },
+  { name: 'Хліб на заквасці', place: 'other_store' },
+  { name: 'Мед квітковий', place: 'market' },
+  { name: 'Кріп свіжий', place: 'own' },
+]
+
 /** Пропозиції кошика: скільки агент показав і скільки людина підтвердила. */
 const PROPOSALS: { goal: string; total: number; addedToCart: boolean; daysAgo: number }[] = [
   { goal: 'Вечеря на двох', total: 18_400, addedToCart: true, daysAgo: 12 },
@@ -75,6 +99,10 @@ export const COOKED_SEED = COOKED.map((c) => ({ fromPantry: c.fromPantry, total:
 export const EATEN_SEED = EATEN.length
 export const WASTED_SEED = WASTED.length
 export const PROPOSALS_SEED = PROPOSALS.map((p) => p.addedToCart)
+export const PURCHASES_SEED = {
+  silpo: MANUAL.filter((m) => m.place === 'silpo').length,
+  known: MANUAL.length,
+}
 
 /**
  * Ідемпотентна: спершу прибирає власні сліди, потім створює наново. Викликається
@@ -83,6 +111,7 @@ export const PROPOSALS_SEED = PROPOSALS.map((p) => p.addedToCart)
 export async function seedActivity(prisma: PrismaClient, userId: string, now = new Date()) {
   await prisma.cookedMeal.deleteMany({ where: { userId } })
   await prisma.pantryItem.deleteMany({ where: { userId, disposal: { not: null } } })
+  await prisma.pantryItem.deleteMany({ where: { userId, source: 'manual' } })
   await prisma.shoppingProposal.deleteMany({ where: { userId } })
 
   for (const m of COOKED) {
@@ -130,6 +159,32 @@ export async function seedActivity(prisma: PrismaClient, userId: string, now = n
   await leave(EATEN, 'eaten', 1)
   await leave(WASTED, 'wasted', 2)
 
+  /**
+   * Ручні додавання лишаються В коморі (quantity > 0): це запаси тривалого
+   * зберігання, які родина докупила між чеками. Метрика місця покупки їх
+   * бачить незалежно від того, спожиті вони чи ні.
+   */
+  for (const [i, m] of MANUAL.entries()) {
+    const normalizedName = normalizeProductName(m.name)
+    const guess = guessCategory(normalizedName)
+    await prisma.pantryItem.create({
+      data: {
+        userId,
+        normalizedName,
+        originalName: m.name,
+        category: guess.category,
+        quantity: 1,
+        unit: 'шт',
+        storageLocation: guess.storageLocation,
+        source: 'manual',
+        purchasePlace: m.place,
+        confidence: 1,
+        needsConfirmation: false,
+        createdAt: daysAgo((i % 12) + 1, now),
+      },
+    })
+  }
+
   for (const [i, p] of PROPOSALS.entries()) {
     await prisma.shoppingProposal.create({
       data: {
@@ -149,6 +204,7 @@ export async function seedActivity(prisma: PrismaClient, userId: string, now = n
     cooked: COOKED.length,
     eaten: EATEN.length,
     wasted: WASTED.length,
+    manual: MANUAL.length,
     proposals: PROPOSALS.length,
   }
 }

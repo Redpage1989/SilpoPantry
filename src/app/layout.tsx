@@ -9,6 +9,27 @@ export const metadata: Metadata = {
     'AI-агент, який знає, що є вдома, планує сімейний раціон і формує готовий кошик «Сільпо». Прототип для хакатону AI Factory.',
   applicationName: 'Сімейна комора',
   manifest: '/manifest.webmanifest',
+  /**
+   * Іконки задані явно, бо покривають три різні споживачі: вкладку браузера,
+   * «Додати на початковий екран» на iOS (apple-touch-icon — Apple ігнорує
+   * маніфест) і посилання, яким застосунок шерять.
+   */
+  icons: {
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  openGraph: {
+    title: 'Сільпо: Сімейна комора',
+    description:
+      'AI-агент, який знає, що є вдома, планує сімейний раціон і формує готовий кошик «Сільпо».',
+    images: ['/icon-512.png'],
+    locale: 'uk_UA',
+    type: 'website',
+  },
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Сімейна комора' },
   robots: { index: false, follow: false },
 }

@@ -38,6 +38,23 @@ export const PANTRY_SOURCES = [
 ] as const
 export type PantrySource = (typeof PANTRY_SOURCES)[number]
 
+/**
+ * Де куплено. Питається лише при ручному додаванні: чек «Сільпо» відповідає
+ * сам за себе, а фото полиці магазину не бачить.
+ *
+ * Заради однієї метрики — чи меншає частка закупів повз «Сільпо». Тому
+ * «ринок» і «своє/город» розділені: перше — конкурент, друге — ні.
+ */
+export const PURCHASE_PLACES = ['silpo', 'other_store', 'market', 'own'] as const
+export type PurchasePlace = (typeof PURCHASE_PLACES)[number]
+
+export const PURCHASE_PLACE_LABELS: Record<PurchasePlace, string> = {
+  silpo: '«Сільпо»',
+  other_store: 'Інший магазин',
+  market: 'Ринок',
+  own: 'Своє / город',
+}
+
 export const SOURCE_LABELS: Record<PantrySource, string> = {
   photo: 'Фото',
   manual: 'Додано вручну',

@@ -4,6 +4,8 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('@/lib/db', () => ({ prisma: {} }))
 
 import { MockSilpoAdapter } from '@/lib/mcp/mock-adapter'
+import { MOCK_CATALOG } from '@/lib/seed/silpo-mock'
+import { SEED_RECIPES } from '@/lib/seed/recipes'
 
 /**
  * Демо-каталог — це те, що бачить журі. «Плов» просив рис, а отримував
@@ -24,5 +26,22 @@ describe('демо-каталог: пошук інгредієнтів', () => {
     // «Спагеті» — не ключ інгредієнта, але є в назві товару
     const [res] = await adapter.findProducts([{ ingredientKey: 'спагеті', query: 'Спагеті' }])
     expect(res.products.map((p) => p.name)).toContainEqual(expect.stringMatching(/Спагеті/))
+  })
+})
+
+/**
+ * Кожен інгредієнт книги рецептів має товар у демо-каталозі. Інакше журі
+ * бачить «Товарів не знайдено в каталозі» на екрані страви — так було з
+ * морквою в «Плові» й із картоплею в шести рецептах.
+ */
+describe('демо-каталог покриває книгу рецептів', () => {
+  it('для кожного ключа інгредієнта є хоча б один товар (не готова страва)', () => {
+    const covered = new Set(MOCK_CATALOG.filter((p) => !p.readyMeal).map((p) => p.ingredientKey))
+    const missing = new Set<string>()
+    for (const r of SEED_RECIPES) {
+      const ings = typeof r.ingredients === 'string' ? JSON.parse(r.ingredients) : r.ingredients
+      for (const i of ings as { normalizedName: string }[]) if (!covered.has(i.normalizedName)) missing.add(i.normalizedName)
+    }
+    expect([...missing].sort()).toEqual([])
   })
 })

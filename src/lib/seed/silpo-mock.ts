@@ -59,6 +59,7 @@ export const MOCK_CATALOG: MockProduct[] = [
   { productId: 'p-milk-01', companyId: 'c-1', name: 'Молоко 2,5%, 900 мл', price: 4290, unit: 'мл', packSize: 900, rating: 4.4, allergens: ['лактоза'], ingredientKey: 'молоко', barcode: '4820000000031' },
   { productId: 'p-sugar-01', companyId: 'c-1', name: 'Цукор білий кристалічний, 1 кг', price: 4900, unit: 'г', packSize: 1000, rating: 4.5, allergens: [], ingredientKey: 'цукор' },
   { productId: 'p-flour-01', companyId: 'c-1', name: 'Борошно пшеничне в/г, 1 кг', price: 3900, unit: 'г', packSize: 1000, rating: 4.4, allergens: ['глютен'], ingredientKey: 'борошно' },
+  { productId: 'p-rice-01', companyId: 'c-1', name: 'Рис довгозернистий, 1 кг', price: 6900, unit: 'г', packSize: 1000, rating: 4.4, allergens: [], ingredientKey: 'рис' },
   { productId: 'p-pasta-01', companyId: 'c-1', name: 'Макарони Спагеті, 400 г', price: 4500, unit: 'г', packSize: 400, rating: 4.3, allergens: ['глютен'], ingredientKey: 'макарони' },
   { productId: 'p-tom-01', companyId: 'c-1', name: 'Помідори червоні, 1 кг', price: 8900, unit: 'г', packSize: 1000, rating: 4.1, allergens: [], ingredientKey: 'помідори' },
   { productId: 'p-butter-01', companyId: 'c-1', name: 'Масло вершкове 72,6%, 200 г', price: 9900, promoPrice: 8400, unit: 'г', packSize: 200, rating: 4.5, allergens: ['лактоза', 'молочний білок'], ingredientKey: 'масло вершкове' },

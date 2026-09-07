@@ -167,11 +167,17 @@ export class MockSilpoAdapter implements SilpoAdapter {
   async findProducts(queries: ProductSearchQuery[]): Promise<ProductSearchResult[]> {
     const results = queries.map((q) => {
       const key = normalizeProductName(q.ingredientKey || q.query)
-      const matches = MOCK_CATALOG.filter(
-        (p) => p.ingredientKey === key || p.ingredientKey === q.ingredientKey || p.name.toLowerCase().includes(q.query.toLowerCase()),
+      const pool = MOCK_CATALOG.filter((p) => !p.readyMeal)
+      const byKey = pool.filter((p) => p.ingredientKey === key || p.ingredientKey === q.ingredientKey)
+      /**
+       * Підрядок назви — лише запасний шлях, коли свого ключа в каталозі нема
+       * (вільний пошук «Спагеті»). Нарівні з ключем він підкидав «Цукор білий
+       * кРИСталічний» на запит «рис», і в демо агент купував цукор замість рису.
+       */
+      const matches = (byKey.length > 0 ? byKey : pool.filter((p) => p.name.toLowerCase().includes(q.query.toLowerCase()))).slice(
+        0,
+        q.limit ?? 5,
       )
-        .filter((p) => !p.readyMeal)
-        .slice(0, q.limit ?? 5)
       return { ingredientKey: q.ingredientKey, products: matches.map(toProductOption) }
     })
     this.record(

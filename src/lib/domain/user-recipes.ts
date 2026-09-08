@@ -215,6 +215,47 @@ export interface WeeklyWinner {
   enoughVotes: boolean
 }
 
+/**
+ * Скільки голосів за тиждень потрібно, щоб узагалі показувати таблицю.
+ *
+ * Той самий поріг, що й для переможця, і з тієї самої причини: таблиця з
+ * трьох рядків по нулю голосів — це не рейтинг, а порожня рамка. Доти
+ * достатньо картки лідера, яка чесно каже, чого бракує.
+ */
+export const MIN_WEEK_VOTES_FOR_BOARD = MIN_VOTES_FOR_WINNER
+
+export interface BoardRow {
+  recipeId: string
+  votes: number
+  /** місце за системою «1, 2, 2, 4»: рівні голоси — рівні місця */
+  rank: number
+}
+
+/**
+ * Таблиця тижня. Ранжує ЛИШЕ за голосами цього тижня, не за всіма:
+ * загальна сума назавжди піднімала б тих, хто опублікувався першим, і
+ * «рецепт тижня» перестав би бути тижневим.
+ *
+ * Порядок при рівності голосів задається не випадково, а за id — інакше
+ * той самий набір даних давав би різні таблиці між запитами, і людина
+ * бачила б «рух» там, де нічого не змінилось.
+ */
+export function rankWeekly(tally: { recipeId: string; votes: number }[]): BoardRow[] {
+  const sorted = [...tally]
+    .filter((r) => r.votes > 0)
+    .sort((a, b) => b.votes - a.votes || a.recipeId.localeCompare(b.recipeId))
+
+  const rows: BoardRow[] = []
+  for (const [i, row] of sorted.entries()) {
+    const prev = rows[i - 1]
+    rows.push({
+      ...row,
+      rank: prev && prev.votes === row.votes ? prev.rank : i + 1,
+    })
+  }
+  return rows
+}
+
 export function pickWeeklyWinner(
   tally: { recipeId: string; votes: number }[],
   week: string,

@@ -67,10 +67,6 @@ async function unfinger(page: Page) {
   await page.evaluate(() => { const f = document.getElementById('pres-finger'); if (f) f.style.opacity = '0' })
 }
 async function tap(page: Page, t: Locator) { await finger(page, t); await t.click(); await unfinger(page) }
-async function scrollTo(page: Page, y: number, settle = 1300) {
-  await page.evaluate((v) => window.scrollTo({ top: v, behavior: 'smooth' }), y)
-  await page.waitForTimeout(settle)
-}
 async function card(page: Page, inner: string) {
   await page.evaluate((h) => {
     const o = document.createElement('div'); o.id = 'pres-card'

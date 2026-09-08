@@ -69,6 +69,14 @@ export async function POST() {
      */
     if (userId === 'demo-user') {
       await prisma.userRecipe.deleteMany({ where: { authorId: userId } })
+      /**
+       * Голоси демо-користувача — теж стан, який мусить скидатися.
+       * Без цього голос, поставлений одним прогоном E2E, доживав до
+       * наступного, і повторне натискання його ЗНІМАЛО: тест бачив
+       * `voted: false` там, де щойно проголосував, і падав через раз.
+       * Голоси вигаданих родин зі стрічки лишаються — вони частина seed.
+       */
+      await prisma.recipeVote.deleteMany({ where: { voterId: userId } })
     }
 
     await resetDemoCart(userId)

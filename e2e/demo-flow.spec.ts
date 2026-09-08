@@ -360,7 +360,14 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
     expect(after.get('молоко'), 'кількість молока мала зрости').not.toBe(before.get('молоко'))
 
     // повторний імпорт тих самих чеків не додає нічого
-    const second = await (await page.request.put('/api/pantry', { headers })).json()
+    const secondRes = await page.request.put('/api/pantry', { headers })
+    /**
+     * Імпорт обмежений пʼятьма викликами на хвилину. Два прогони набору
+     * підряд вичерпують ліміт, і без цієї перевірки тест падав із
+     * «expected 0, received undefined» — тобто мовчав про справжню причину.
+     */
+    expect(secondRes.ok(), `імпорт відповів ${secondRes.status()} (ліміт — 5/хв)`).toBeTruthy()
+    const second = await secondRes.json()
     expect(second.newReceipts).toBe(0)
     expect(second.imported).toBe(0)
     expect(second.toppedUp).toBe(0)
@@ -449,9 +456,13 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
     expect(body.reports, 'повторна скарга того самого користувача не рахується').toBe(1)
     expect(body.hidden).toBe(false)
 
-    // рецепт лишається у стрічці
+    /**
+     * Рецепт лишається у стрічці. Шукаємо саме заголовок картки: відколи
+     * зʼявилась таблиця тижня, назва трапляється на екрані двічі, і
+     * getByText став неоднозначним.
+     */
     await page.goto('/recipes/community')
-    await expect(page.getByText(target.title)).toBeVisible()
+    await expect(page.getByRole('heading', { name: target.title })).toBeVisible()
   })
 
   /**
@@ -491,5 +502,62 @@ test.describe('Сільпо: Сімейна комора — demo-сценарі
     await page.goto('/pantry')
     await expect(page.getByText('Комора порожня')).toHaveCount(0)
     await expect(page.getByText('на 3 ос.')).toBeVisible()
+  })
+
+  /**
+   * Голос за рецепт тижня заробляється приготуванням.
+   *
+   * Доти голосували за назву й емодзі: достатньо було проґортати стрічку.
+   * Накрутити тепер заважає не перевірка особи, а продукти — «Я це
+   * приготував» списує інгредієнти з комори. Тест стереже саме межу:
+   * до приготування сервер відмовляє, після — приймає.
+   */
+  test('14. Голос за рецепт спільноти дає лише той, хто його готував', async ({ page, context }) => {
+    await startDemo(page)
+    const csrf = (await context.cookies()).find((c) => c.name === 'sp_csrf')?.value
+    const headers = { 'x-csrf-token': csrf as string }
+
+    const feed = await (await page.request.get('/api/user-recipes')).json()
+    const target = feed.recipes.find(
+      (r: { isMine: boolean; status: string; cookedByMe: boolean }) =>
+        !r.isMine && r.status === 'published' && !r.cookedByMe,
+    )
+    expect(target, 'у стрічці має бути чужий рецепт, якого демо ще не готувало').toBeTruthy()
+
+    const refused = await page.request.post('/api/user-recipes/vote', {
+      headers,
+      data: { recipeId: target.id },
+    })
+    expect(refused.ok(), 'голос без приготування має бути відхилений').toBeFalsy()
+
+    // у стрічці замість кнопки голосу стоїть шлях її заробити
+    await page.goto('/recipes/community')
+    await expect(page.getByText('голосувати може той, хто готував').first()).toBeVisible()
+
+    const cooked = await page.request.post('/api/cooked', {
+      headers,
+      data: { slug: target.slug, source: 'community', servings: target.servings, apply: true },
+    })
+    expect(cooked.ok(), 'рецепт спільноти має бути доступний для приготування').toBeTruthy()
+
+    const accepted = await page.request.post('/api/user-recipes/vote', {
+      headers,
+      data: { recipeId: target.id },
+    })
+    expect(accepted.ok()).toBeTruthy()
+    expect((await accepted.json()).voted).toBe(true)
+  })
+
+  /** Рецепт спільноти відкривається на повний екран і рахує покриття коморою. */
+  test('15. Рецепт спільноти має власну сторінку з покриттям і списанням', async ({ page }) => {
+    await startDemo(page)
+    const feed = await (await page.request.get('/api/user-recipes')).json()
+    const target = feed.recipes.find((r: { status: string }) => r.status === 'published')
+    expect(target).toBeTruthy()
+
+    await page.goto(`/recipes/community/${target.slug}`)
+    await expect(page.getByRole('heading', { name: target.title })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Я це приготував/ })).toBeVisible()
+    await expect(page.getByText('Інгредієнти на').first()).toBeVisible()
   })
 })

@@ -5,7 +5,7 @@ import { errorResponse } from '@/lib/api'
 import { logEvent } from '@/lib/mcp/pii'
 import { resetDemoCart } from '@/lib/mcp/mock-adapter'
 import { seedDemoUser, seedRecipes, DEMO_USER_ID } from '@/lib/seed/demo'
-import { seedCommunity } from '@/lib/seed/community'
+import { seedCommunity, seedCommunityCooked } from '@/lib/seed/community'
 import { seedActivity } from '@/lib/seed/activity'
 
 /**
@@ -72,6 +72,13 @@ export async function POST() {
      * порожня, тобто користувач уже існує. `update` порожній навмисно —
      * налаштування, змінені під час показу, затирати не треба.
      */
+    /**
+     * Останнім кроком, і навмисно поза умовами вище: seedActivity прибирає
+     * власні сліди разом із журналом приготованого, тож ця страва мусить
+     * зʼявлятися після нього, а не до.
+     */
+    await seedCommunityCooked(prisma, DEMO_USER_ID)
+
     const user = await prisma.user.upsert({
       where: { id: DEMO_USER_ID },
       update: {},

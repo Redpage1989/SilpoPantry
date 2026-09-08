@@ -28,6 +28,7 @@ interface CookedResponse {
  */
 export function RecipeActions({
   slug,
+  source = 'book',
   title,
   servings,
   baseServings,
@@ -35,6 +36,8 @@ export function RecipeActions({
   missingCost,
 }: {
   slug: string
+  /** книга чи рецепт спільноти — простори імен slug-ів різні */
+  source?: 'book' | 'community'
   title: string
   servings: number
   baseServings: number
@@ -49,14 +52,15 @@ export function RecipeActions({
 
   function setServings(next: number) {
     const clamped = Math.max(1, Math.min(12, next))
-    router.replace(`/recipes/${slug}?servings=${clamped}`)
+    const base = source === 'community' ? `/recipes/community/${slug}` : `/recipes/${slug}`
+    router.replace(`${base}?servings=${clamped}`)
   }
 
   async function cook(apply: boolean) {
     setBusy(true)
     setError(null)
     try {
-      const res = await apiPost<CookedResponse>('/api/cooked', { slug, servings, apply })
+      const res = await apiPost<CookedResponse>('/api/cooked', { slug, source, servings, apply })
       if (apply) {
         setDone(true)
         setPreview(null)

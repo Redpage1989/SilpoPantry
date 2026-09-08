@@ -5,6 +5,8 @@ import {
   isoWeek,
   pickWeeklyWinner,
   MIN_VOTES_FOR_WINNER,
+  MIN_WEEK_VOTES_FOR_BOARD,
+  rankWeekly,
   UserRecipeInputSchema,
   weekLabel,
 } from '@/lib/domain/user-recipes'
@@ -270,5 +272,60 @@ describe('стартова стрічка спільноти', () => {
       expect(r.votedBy).not.toContain(r.authorId)
       expect(new Set(r.votedBy).size).toBe(r.votedBy.length)
     }
+  })
+})
+
+/**
+ * Таблиця тижня. Головне, що вона мусить робити правильно, — не вигадувати
+ * порядок там, де голоси рівні, і не тягнути в рейтинг нулі.
+ */
+describe('rankWeekly', () => {
+  it('ранжує за голосами цього тижня', () => {
+    const rows = rankWeekly([
+      { recipeId: 'b', votes: 2 },
+      { recipeId: 'a', votes: 5 },
+      { recipeId: 'c', votes: 3 },
+    ])
+    expect(rows.map((r) => [r.recipeId, r.rank])).toEqual([
+      ['a', 1],
+      ['c', 2],
+      ['b', 3],
+    ])
+  })
+
+  it('рівні голоси дають рівні місця, наступне місце пропускається', () => {
+    const rows = rankWeekly([
+      { recipeId: 'a', votes: 4 },
+      { recipeId: 'b', votes: 2 },
+      { recipeId: 'c', votes: 2 },
+      { recipeId: 'd', votes: 1 },
+    ])
+    expect(rows.map((r) => r.rank)).toEqual([1, 2, 2, 4])
+  })
+
+  it('порядок при рівності стабільний між викликами', () => {
+    const tally = [
+      { recipeId: 'zzz', votes: 3 },
+      { recipeId: 'aaa', votes: 3 },
+    ]
+    const first = rankWeekly(tally).map((r) => r.recipeId)
+    const second = rankWeekly([...tally].reverse()).map((r) => r.recipeId)
+    expect(first).toEqual(second)
+  })
+
+  it('рецепти без голосів у таблицю не потрапляють', () => {
+    const rows = rankWeekly([
+      { recipeId: 'a', votes: 1 },
+      { recipeId: 'b', votes: 0 },
+    ])
+    expect(rows.map((r) => r.recipeId)).toEqual(['a'])
+  })
+
+  it('порожній тиждень дає порожню таблицю, а не нульовий рядок', () => {
+    expect(rankWeekly([])).toEqual([])
+  })
+
+  it('поріг показу таблиці збігається з порогом переможця', () => {
+    expect(MIN_WEEK_VOTES_FOR_BOARD).toBe(MIN_VOTES_FOR_WINNER)
   })
 })

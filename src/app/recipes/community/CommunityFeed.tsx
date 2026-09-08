@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import Link from 'next/link'
 import { Badge, Button, Card, LinkButton, SectionTitle } from '@/components/ui'
 import { apiGet, apiPost, ApiError } from '@/lib/client'
 import { DIFFICULTY_LABELS, MEAL_LABELS, type Difficulty, type MealType } from '@/lib/domain/types'
@@ -31,6 +32,8 @@ interface CommunityRecipe {
   votesTotal: number
   votesThisWeek: number
   votedByMe: boolean
+  /** голос заробляється приготуванням — див. api/user-recipes/vote */
+  cookedByMe: boolean
 }
 
 const REPORT_REASONS = [
@@ -58,6 +61,9 @@ interface FeedResponse {
   isoWeek: string
   weekLabelText: string
   winner: { recipeId: string | null; votes: number; enoughVotes: boolean }
+  board: { recipeId: string; votes: number; rank: number }[]
+  boardThreshold: number
+  weekVotesTotal: number
   prize: { balabonuses: number; awardedBy: string; confirmed: boolean }
   awards: WeeklyAward[]
   recipes: CommunityRecipe[]
@@ -148,6 +154,50 @@ export function CommunityFeed() {
             )}
           </Card>
 
+          {/* Таблиця тижня. Зʼявляється лише коли є що ранжувати: три рядки
+              по нулю голосів — це не рейтинг, а порожня рамка */}
+          {data.board.length > 0 && (
+            <Card padded={false} className="overflow-hidden">
+              <div className="flex items-baseline justify-between gap-2 px-4 pt-3">
+                <h2 className="text-[15px] font-semibold">Таблиця тижня</h2>
+                <span className="text-[11px] text-graphite-300">
+                  {data.weekVotesTotal} {pluralize(data.weekVotesTotal, 'голос', 'голоси', 'голосів')}
+                </span>
+              </div>
+              <ul className="mt-2 divide-y divide-cream-200">
+                {data.board.map((row) => {
+                  const r = data.recipes.find((x) => x.id === row.recipeId)
+                  if (!r) return null
+                  return (
+                    <li key={row.recipeId} className="flex items-center gap-3 px-4 py-2.5">
+                      <span
+                        className={`w-6 shrink-0 text-center text-[15px] font-bold ${
+                          row.rank === 1 ? 'text-accent-700' : 'text-graphite-300'
+                        }`}
+                      >
+                        {row.rank}
+                      </span>
+                      <span className="text-xl" aria-hidden>{r.imageEmoji}</span>
+                      <Link
+                        href={`/recipes/community/${r.slug}`}
+                        className="min-w-0 flex-1 truncate text-[14px] font-medium leading-tight"
+                      >
+                        {r.title}
+                      </Link>
+                      <span className="shrink-0 text-[13px] font-semibold text-graphite-700">
+                        {row.votes}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+              <p className="px-4 pb-3 pt-2 text-[11px] leading-relaxed text-graphite-300">
+                Рахуються голоси лише цього тижня. Голос дає той, хто приготував страву, — тому
+                накрутити його можна хіба що продуктами з власної комори.
+              </p>
+            </Card>
+          )}
+
           {/* Приз переможцю */}
           <Card className="bg-accent-50">
             <div className="flex gap-3">
@@ -224,7 +274,15 @@ export function CommunityFeed() {
                 <span className="text-3xl" aria-hidden>{r.imageEmoji}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-[15px] font-semibold leading-tight">{r.title}</h3>
+                    <h3 className="text-[15px] font-semibold leading-tight">
+                      {r.status === 'published' || r.isMine ? (
+                        <Link href={`/recipes/community/${r.slug}`} className="hover:underline">
+                          {r.title}
+                        </Link>
+                      ) : (
+                        r.title
+                      )}
+                    </h3>
                     <div className="flex shrink-0 gap-1">
                       {r.status === 'draft' && <Badge tone="warn">чернетка</Badge>}
                       {r.status === 'hidden' && <Badge tone="danger">сховано</Badge>}
@@ -281,15 +339,38 @@ export function CommunityFeed() {
                   <span className="text-[12px] text-graphite-500">
                     {r.votesThisWeek} {pluralize(r.votesThisWeek, 'голос', 'голоси', 'голосів')} цього тижня
                     {r.votesTotal > r.votesThisWeek && ` · ${r.votesTotal} усього`}
+                    {!r.isMine && !r.cookedByMe && (
+                      <span className="block text-[11px] text-graphite-300">
+                        голосувати може той, хто готував
+                      </span>
+                    )}
                   </span>
-                  <Button
-                    variant={r.votedByMe ? 'primary' : 'secondary'}
-                    className="min-h-[44px] px-4 text-[13px]"
-                    disabled={r.isMine || vote.isPending}
-                    onClick={() => vote.mutate(r.id)}
-                  >
-                    {r.isMine ? 'свій рецепт' : r.votedByMe ? '★ Проголосовано' : '☆ Голосувати'}
-                  </Button>
+                  {/**
+                   * Три стани, і жоден не бреше. Кнопка «Голосувати» на
+                   * неприготованому рецепті вела б у помилку сервера, тому
+                   * замість неї — посилання на сам рецепт: єдиний шлях
+                   * заробити голос.
+                   */}
+                  {r.isMine ? (
+                    <span className="shrink-0 text-[12px] text-graphite-300">свій рецепт</span>
+                  ) : r.cookedByMe ? (
+                    <Button
+                      variant={r.votedByMe ? 'primary' : 'secondary'}
+                      className="min-h-[44px] px-4 text-[13px]"
+                      disabled={vote.isPending}
+                      onClick={() => vote.mutate(r.id)}
+                    >
+                      {r.votedByMe ? '★ Проголосовано' : '☆ Голосувати'}
+                    </Button>
+                  ) : (
+                    <LinkButton
+                      href={`/recipes/community/${r.slug}`}
+                      variant="secondary"
+                      className="min-h-[44px] shrink-0 px-4 text-[13px]"
+                    >
+                      Приготувати →
+                    </LinkButton>
+                  )}
                 </div>
               )}
 

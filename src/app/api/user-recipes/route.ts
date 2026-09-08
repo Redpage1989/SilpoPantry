@@ -6,6 +6,8 @@ import {
   slugifyTitle,
   isoWeek,
   pickWeeklyWinner,
+  rankWeekly,
+  MIN_WEEK_VOTES_FOR_BOARD,
   weekLabel,
 } from '@/lib/domain/user-recipes'
 import { moderateRecipe } from '@/lib/domain/moderation'
@@ -128,10 +130,34 @@ export async function GET(request: Request) {
     })
     const mine = new Set(myVotes.map((v) => v.userRecipeId))
 
+    /**
+     * Що людина вже готувала. Саме це, а не лише авторство, вирішує, чи
+     * може вона голосувати: голос заробляється приготуванням (див.
+     * vote/route.ts). Список slug-ів, бо CookedMeal посилається на рецепт
+     * слагом, а не звʼязком — журнал має пережити видалення рецепта.
+     */
+    const cookedRows = await prisma.cookedMeal.findMany({
+      where: { userId },
+      select: { recipeSlug: true },
+      distinct: ['recipeSlug'],
+    })
+    const cookedSlugs = new Set(cookedRows.map((c) => c.recipeSlug))
+
     const winner = pickWeeklyWinner(
       weekVotes.map((v) => ({ recipeId: v.userRecipeId, votes: v._count.userRecipeId })),
       week,
     )
+
+    /**
+     * Таблиця тижня зʼявляється лише коли за тиждень набралось достатньо
+     * голосів. Порожня таблиця з нулями виглядає як зламаний екран, а не як
+     * рейтинг, — і суперечила б тому, як мовчать метрики на «Що змінилось».
+     */
+    const weekTotal = weekVotes.reduce((sum, v) => sum + v._count.userRecipeId, 0)
+    const board =
+      weekTotal >= MIN_WEEK_VOTES_FOR_BOARD
+        ? rankWeekly(weekVotes.map((v) => ({ recipeId: v.userRecipeId, votes: v._count.userRecipeId })))
+        : []
 
     const awards = await prisma.weeklyAward.findMany({
       orderBy: { isoWeek: 'desc' },
@@ -152,6 +178,9 @@ export async function GET(request: Request) {
        */
       weekLabelText: weekLabel(week, now),
       winner,
+      board,
+      boardThreshold: MIN_WEEK_VOTES_FOR_BOARD,
+      weekVotesTotal: weekTotal,
       /**
        * Приз показуємо як пропозицію застосунку, а не як обіцянку «Сільпо»:
        * нарахувати балабонуси зсередини неможливо — усі лояльнісні
@@ -198,6 +227,7 @@ export async function GET(request: Request) {
         votesTotal: r._count.votes,
         votesThisWeek: votesThisWeek.get(r.id) ?? 0,
         votedByMe: mine.has(r.id),
+        cookedByMe: cookedSlugs.has(r.slug),
         createdAt: r.createdAt.toISOString(),
       })),
     }

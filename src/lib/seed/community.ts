@@ -206,3 +206,43 @@ export async function seedCommunity(prisma: PrismaClient, now = new Date()) {
 
   return { authors: AUTHORS.length, recipes: created, votes }
 }
+
+/**
+ * Демо-родина вже готувала один рецепт спільноти.
+ *
+ * Потрібно, щоб на показі було видно ОБИДВА стани кнопки: приготований
+ * рецепт можна оцінити одразу, решта пропонує спершу приготувати. Без цього
+ * уся стрічка виглядала б як заблокована, і головна ідея — «голос
+ * заробляється приготуванням» — читалась би як поломка.
+ *
+ * Демо-користувач і далі не голосує сам: показувати «рецепт тижня», обраний
+ * акаунтом, з якого дивиться кожен відвідувач, було б підробкою.
+ *
+ * Ідемпотентна: другий виклик нічого не додає.
+ */
+export async function seedCommunityCooked(prisma: PrismaClient, userId: string, now = new Date()) {
+  const first = COMMUNITY_RECIPES[0]
+  if (!first) return { cooked: 0 }
+
+  const slug = slugifyTitle(first.title)
+  const recipe = await prisma.userRecipe.findUnique({ where: { slug } })
+  if (!recipe) return { cooked: 0 }
+
+  const already = await prisma.cookedMeal.findFirst({ where: { userId, recipeSlug: slug } })
+  if (already) return { cooked: 0 }
+
+  const required = checkComposition(first.ingredients).ingredients.length
+  await prisma.cookedMeal.create({
+    data: {
+      userId,
+      recipeSlug: slug,
+      title: first.title,
+      servings: first.servings,
+      total: required,
+      // не всі інгредієнти були вдома — рівно так само, як у решті історії
+      fromPantry: Math.max(0, required - 1),
+      cookedAt: new Date(now.getTime() - 4 * 86_400_000),
+    },
+  })
+  return { cooked: 1 }
+}

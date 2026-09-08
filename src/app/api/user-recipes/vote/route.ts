@@ -11,6 +11,16 @@ const Input = z.object({ recipeId: z.string().min(1) })
  * Унікальність (recipe, voter, week) гарантує база, а не код: без цього
  * достатньо двох паралельних натискань, щоб отримати два голоси від
  * однієї людини.
+ *
+ * Голос ЗАРОБЛЯЄТЬСЯ приготуванням. Доти достатньо було проґортати стрічку
+ * й натиснути зірочку — тобто голосували за назву й емодзі, а не за страву.
+ * Накрутити тепер не можна не через перевірку особи, а через продукти:
+ * «Я це приготував» списує інгредієнти з комори, і порожня комора не дає
+ * приготувати нічого. Три голоси означають три родини, які це справді
+ * зварили.
+ *
+ * Знімати свій голос можна завжди: інакше людина, яка передумала, лишалася б
+ * заручником власного натискання.
  */
 export async function POST(request: Request) {
   return handle(request, { mutating: true, rateLimitPerMinute: 30 }, async (userId) => {
@@ -25,6 +35,11 @@ export async function POST(request: Request) {
       throw new Error('За власний рецепт голосувати не можна')
     }
 
+    const cooked = await prisma.cookedMeal.findFirst({
+      where: { userId, recipeSlug: recipe.slug },
+      select: { id: true },
+    })
+
     const existing = await prisma.recipeVote.findUnique({
       where: { userRecipeId_voterId_isoWeek: { userRecipeId: recipeId, voterId: userId, isoWeek: week } },
     })
@@ -32,6 +47,9 @@ export async function POST(request: Request) {
     if (existing) {
       await prisma.recipeVote.delete({ where: { id: existing.id } })
     } else {
+      if (!cooked) {
+        throw new Error('Спершу приготуйте цей рецепт — голос дає лише власний досвід')
+      }
       await prisma.recipeVote.create({
         data: { userRecipeId: recipeId, voterId: userId, isoWeek: week },
       })

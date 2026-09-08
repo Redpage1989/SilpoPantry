@@ -6,6 +6,22 @@ import { ConfirmationRequiredError } from '@/lib/agent/tools'
 
 /** Спільна обгортка route handler-ів: сесія, CSRF, rate limit, помилки. */
 
+/**
+ * Свідома відмова користувачу, а не збій.
+ *
+ * «Спершу приготуйте цей рецепт» — правило продукту, і воно спрацьовує
+ * штатно щоразу, коли хтось тисне голос не в тому порядку. Доти такі
+ * випадки летіли як `api.unhandled` рівнем error і з кодом 500: лог
+ * помилок наповнювався нормальною поведінкою, а справжній збій у ньому
+ * було вже не знайти.
+ */
+export class RefusedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RefusedError'
+  }
+}
+
 export class UnauthorizedError extends Error {
   constructor() {
     super('Потрібна авторизація або demo-режим')
@@ -57,6 +73,9 @@ export function errorResponse(err: unknown): NextResponse {
   }
   if (err instanceof ConfirmationRequiredError) {
     return NextResponse.json({ error: err.message, code: 'confirmation_required' }, { status: 409 })
+  }
+  if (err instanceof RefusedError) {
+    return NextResponse.json({ error: err.message, code: 'refused' }, { status: 409 })
   }
   if (err instanceof ZodError) {
     return NextResponse.json(

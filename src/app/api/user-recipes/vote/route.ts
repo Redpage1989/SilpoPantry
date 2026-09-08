@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '@/lib/db'
-import { handle } from '@/lib/api'
+import { handle, RefusedError } from '@/lib/api'
 import { isoWeek } from '@/lib/domain/user-recipes'
 
 const Input = z.object({ recipeId: z.string().min(1) })
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     })
     if (!recipe) throw new Error('Рецепт не знайдено')
     if (recipe.authorId === userId) {
-      throw new Error('За власний рецепт голосувати не можна')
+      throw new RefusedError('За власний рецепт голосувати не можна')
     }
 
     const cooked = await prisma.cookedMeal.findFirst({
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       await prisma.recipeVote.delete({ where: { id: existing.id } })
     } else {
       if (!cooked) {
-        throw new Error('Спершу приготуйте цей рецепт — голос дає лише власний досвід')
+        throw new RefusedError('Спершу приготуйте цей рецепт — голос дає лише власний досвід')
       }
       await prisma.recipeVote.create({
         data: { userRecipeId: recipeId, voterId: userId, isoWeek: week },

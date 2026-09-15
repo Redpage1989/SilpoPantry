@@ -70,7 +70,7 @@
 ```bash
 cd ~/Developer/SilpoPantry
 npm run verify         # typecheck + lint + 292 unit-тести
-npm run test:e2e       # 13 наскрізних сценаріїв
+npm run test:e2e       # 15 наскрізних сценаріїв
 curl -s -o /dev/null -w "%{http_code}\n" https://komora.im.pl.ua/login   # має бути 200
 ```
 

@@ -38,8 +38,8 @@ npm run dev               # http://localhost:3210
 ### Перевірка якості
 
 ```bash
-npm run verify            # typecheck + lint + 310 unit-тестів
-npm run test:e2e          # 13 наскрізних сценаріїв Playwright на 390×844
+npm run verify            # typecheck + lint + 322 unit-тести
+npm run test:e2e          # 15 наскрізних сценаріїв Playwright на 390×844
 ```
 
 ---

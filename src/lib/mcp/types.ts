@@ -145,6 +145,11 @@ export interface ProductSearchResult {
  * Реалізацій дві: LiveSilpoAdapter (справжній MCP) і MockSilpoAdapter (demo).
  * UI не знає, яка з них працює — знає лише `mode`, який чесно показує.
  */
+export interface OrderSourceFailure {
+  source: 'offline_receipt' | 'online_order'
+  reason: string
+}
+
 export interface SilpoAdapter {
   readonly mode: McpMode
   /** перелік інструментів, які реально є на сервері (live) або емульовані (mock) */
@@ -153,6 +158,12 @@ export interface SilpoAdapter {
   getFamily(): Promise<SilpoFamilyMember[]>
   getRestrictions(): Promise<SilpoRestriction[]>
   getOrders(): Promise<SilpoOrder[]>
+  /**
+   * Джерела чеків, які під час останнього getOrders() не відповіли.
+   * Потрібно, щоб імпорт не казав «усі покупки вже враховані», коли
+   * половина історії просто не завантажилась.
+   */
+  orderSourceFailures?(): OrderSourceFailure[]
   getLoyalty(): Promise<SilpoLoyalty>
   getCoupons(): Promise<SilpoCoupon[]>
   getPromos(): Promise<SilpoPromo[]>

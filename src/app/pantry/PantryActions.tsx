@@ -16,6 +16,8 @@ interface ImportResult {
   newReceipts: number
   mode: 'live' | 'mock'
   modeReason: string
+  /** джерела чеків, які «Сільпо» не віддав: імпорт був неповним */
+  unavailable?: ('offline_receipt' | 'online_order')[]
 }
 
 /** Дії над коморою: імпорт із чеків і ручне додавання товару. */
@@ -65,6 +67,19 @@ export function PantryActions() {
           )}
           {result.mode === 'mock' && ' Дані демонстраційні.'}
         </InfoNote>
+      )}
+
+      {/**
+        * Неповний імпорт мусить бути видно. Без цього людина купила в
+        * магазині, натиснула кнопку, прочитала «усі покупки вже враховані» —
+        * і не мала як дізнатися, що чеки з кас навіть не завантажились.
+        */}
+      {result?.unavailable && result.unavailable.length > 0 && (
+        <div className="rounded-2xl bg-warn-50 p-3 text-[13px] leading-snug text-[#8a6200]">
+          {result.unavailable.includes('offline_receipt')
+            ? '⚠️ Чеки з кас магазинів «Сільпо» зараз не завантажились — враховано лише онлайн-замовлення. Покупку з магазину можна додати вручну або з фото чека.'
+            : '⚠️ Онлайн-замовлення «Сільпо» зараз не завантажились — враховано лише чеки з кас.'}
+        </div>
       )}
 
       {error && (

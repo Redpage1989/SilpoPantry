@@ -420,9 +420,17 @@ export async function updatePantryInventory(
  */
 export async function importPantryFromReceipts(
   ctx: ToolContext,
-): Promise<{ imported: number; toppedUp: number; skipped: number; newReceipts: number }> {
+): Promise<{
+  imported: number
+  toppedUp: number
+  skipped: number
+  newReceipts: number
+  /** джерела чеків, які не відповіли: імпорт неповний, і людина має це знати */
+  unavailable: ('offline_receipt' | 'online_order')[]
+}> {
   return step(ctx, 'importPantryFromReceipts', {}, async () => {
     const orders = await ctx.adapter.getOrders()
+    const unavailable = (ctx.adapter.orderSourceFailures?.() ?? []).map((f) => f.source)
 
     const seen = await prisma.receiptImport.findMany({
       where: { userId: ctx.userId },
@@ -433,8 +441,10 @@ export async function importPantryFromReceipts(
 
     if (fresh.length === 0) {
       return {
-        result: { imported: 0, toppedUp: 0, skipped: 0, newReceipts: 0 },
-        summary: `Нових чеків немає: усі ${orders.length} вже враховані в коморі`,
+        result: { imported: 0, toppedUp: 0, skipped: 0, newReceipts: 0, unavailable },
+        summary: unavailable.length
+          ? `Нових чеків серед завантажених немає, але частина історії недоступна: ${unavailable.join(', ')}`
+          : `Нових чеків немає: усі ${orders.length} вже враховані в коморі`,
         output: { newReceipts: 0 },
       }
     }
@@ -518,7 +528,7 @@ export async function importPantryFromReceipts(
 
     const skipped = decisions.filter((d) => d.decision !== 'imported' && d.decision !== 'merged').length
     return {
-      result: { imported, toppedUp, skipped, newReceipts: fresh.length },
+      result: { imported, toppedUp, skipped, newReceipts: fresh.length, unavailable },
       summary:
         `З ${fresh.length} нових чеків: додано ${imported} позицій, поповнено ${toppedUp}, ` +
         `пропущено ${skipped} (протерміноване, непродовольче або вже спожите)`,

@@ -25,6 +25,7 @@ import type {
   SilpoPromo,
   SilpoRestriction,
   SilpoTimeSlot,
+  OrderSourceFailure,
 } from './types'
 
 /**
@@ -74,6 +75,8 @@ export class LiveSilpoAdapter implements SilpoAdapter {
   }
 
   /** tools/list виконується один раз на сесію адаптера. */
+  private orderFailures: OrderSourceFailure[] = []
+
   private async registry_(): Promise<ToolRegistry> {
     if (this.registry) return this.registry
     const started = Date.now()
@@ -258,7 +261,37 @@ export class LiveSilpoAdapter implements SilpoAdapter {
     const orders: SilpoOrder[] = []
     if (offline.status === 'fulfilled') orders.push(...asArray(offline.value).map((o) => toOrder(o, 'offline_receipt')))
     if (online.status === 'fulfilled') orders.push(...asArray(online.value).map((o) => toOrder(o, 'online_order')))
+
+    /**
+     * Збій одного джерела не валить імпорт — але й не має зникати безслідно.
+     * Доти `allSettled` ковтав його мовчки: на проді офлайн-чеки не
+     * завантажились ЖОДНОГО разу (у журналі 23 онлайн-замовлення й нуль
+     * офлайн), а екран казав «усі покупки вже враховані». Людина купила в
+     * магазині, натиснула імпорт — і не мала як дізнатися, що її чек навіть
+     * не запитували.
+     *
+     * У лог ідуть імена схожих інструментів: якщо «Сільпо» перейменував
+     * інструмент, наступний крок видно одразу, без доступу до чужого токена.
+     */
+    this.orderFailures = []
+    const branches = [
+      ['offline_receipt', offline],
+      ['online_order', online],
+    ] as const
+    for (const [source, outcome] of branches) {
+      if (outcome.status === 'fulfilled') continue
+      const reason = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)
+      this.orderFailures.push({ source, reason })
+      const similar = (this.registry?.all ?? [])
+        .map((t) => t.name)
+        .filter((n) => /order|receipt|cheque|check|purchase|histor/i.test(n))
+      logEvent('warn', 'mcp.orders_source_failed', { source, reason, similarTools: similar })
+    }
     return orders.sort((a, b) => b.date.localeCompare(a.date))
+  }
+
+  orderSourceFailures(): OrderSourceFailure[] {
+    return this.orderFailures
   }
 
   // ─────────────────────────── лояльність ───────────────────────────

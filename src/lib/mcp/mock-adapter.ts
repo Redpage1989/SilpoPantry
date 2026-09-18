@@ -51,6 +51,9 @@ export async function resetDemoCart(userId?: string): Promise<void> {
   else await prisma.demoCart.deleteMany({})
 }
 
+/** День, відносно якого писались дати демо-чеків: найсвіжіший був «позавчора». */
+const MOCK_ORDERS_ANCHOR = new Date('2026-09-10T00:00:00+03:00')
+
 export class MockSilpoAdapter implements SilpoAdapter {
   readonly mode = 'mock' as const
   private trace: McpTraceEntry[] = []
@@ -129,9 +132,24 @@ export class MockSilpoAdapter implements SilpoAdapter {
   }
 
   async getOrders(): Promise<SilpoOrder[]> {
+    /**
+     * Дати демо-чеків зсуваються разом із календарем.
+     *
+     * У фікстурі вони зашиті (2, 5 і 8 вересня) і мали сенс, поки «сьогодні»
+     * було десятим вересня. Через тиждень молоко з такого чека вже вважалось
+     * зіпсованим, і імпорт у демо майже все пропускав: журі натискало
+     * «Імпорт із чеків» і бачило порожній результат, а e2e-тест на поповнення
+     * падав без жодної зміни в коді.
+     *
+     * Зсув цілими днями зберігає і відстань між чеками, і час доби.
+     * orderId лишається незмінним — саме на ньому тримається ідемпотентність.
+     */
+    const shiftDays = Math.max(0, Math.floor((Date.now() - MOCK_ORDERS_ANCHOR.getTime()) / 86_400_000))
+    const shift = (iso: string) => new Date(new Date(iso).getTime() + shiftDays * 86_400_000).toISOString()
+
     const offline: SilpoOrder[] = MOCK_OFFLINE_ORDERS.map((o) => ({
       orderId: o.orderId,
-      date: o.date,
+      date: shift(o.date),
       kind: 'offline_receipt',
       storeName: o.storeName,
       total: o.total,
@@ -139,7 +157,7 @@ export class MockSilpoAdapter implements SilpoAdapter {
     }))
     const online: SilpoOrder[] = MOCK_ONLINE_ORDERS.map((o) => ({
       orderId: o.orderId,
-      date: o.date,
+      date: shift(o.date),
       kind: 'online_order',
       total: o.total,
       items: o.items,

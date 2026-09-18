@@ -127,3 +127,55 @@ describe('інференс комори з чеків', () => {
     expect(inferPantryFromReceipts([], NOW)).toEqual({ items: [], decisions: [] })
   })
 })
+
+import { selectFreshOrders } from '@/lib/domain/receipts'
+
+/**
+ * Спадок помилки парсера: у журналі лишився рядок з номером 'order', який
+ * означає «усе, що сервер віддав на момент того імпорту, вже оброблено».
+ * Без межі за датою ті самі чеки після виправлення парсера здобули б нові
+ * номери й імпортувались удруге — комора подвоїлась би.
+ */
+describe('selectFreshOrders', () => {
+  const at = (iso: string) => new Date(iso)
+  const legacy = { orderRef: 'order', kind: 'offline_receipt', createdAt: at('2026-09-18T09:27:42Z') }
+
+  it('чек, якого немає в журналі, свіжий', () => {
+    const fresh = selectFreshOrders(
+      [{ orderId: 'x', kind: 'online_order', date: '2026-09-10T10:00:00Z' }],
+      [],
+      'order',
+    )
+    expect(fresh).toHaveLength(1)
+  })
+
+  it('касові чеки до старого запису вважаються врахованими', () => {
+    const fresh = selectFreshOrders(
+      [
+        { orderId: 'new-a', kind: 'offline_receipt', date: '2026-09-17T15:07:39Z' },
+        { orderId: 'new-b', kind: 'offline_receipt', date: '2026-08-22T11:30:00Z' },
+      ],
+      [legacy],
+      'order',
+    )
+    expect(fresh).toEqual([])
+  })
+
+  it('чек, куплений після старого запису, імпортується', () => {
+    const fresh = selectFreshOrders(
+      [{ orderId: 'new-c', kind: 'offline_receipt', date: '2026-09-19T12:00:00Z' }],
+      [legacy],
+      'order',
+    )
+    expect(fresh.map((o) => o.orderId)).toEqual(['new-c'])
+  })
+
+  it('межа стосується лише касових чеків, не онлайн-замовлень', () => {
+    const fresh = selectFreshOrders(
+      [{ orderId: 'onl-1', kind: 'online_order', date: '2026-01-31T10:00:00Z' }],
+      [legacy],
+      'order',
+    )
+    expect(fresh).toHaveLength(1)
+  })
+})

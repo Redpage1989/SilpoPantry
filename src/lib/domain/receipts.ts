@@ -227,3 +227,32 @@ function round2(n: number): number {
 function formatDate(date: Date): string {
   return date.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
+
+/**
+ * Які чеки ще не враховані в коморі.
+ *
+ * Звичайний випадок простий: чек свіжий, якщо його номера немає в журналі.
+ *
+ * Особливий — спадок помилки парсера: до 18.09.2026 усі касові чеки
+ * діставали однаковий номер `order`, і в журналі лишився один такий рядок
+ * на користувача. Він означає «усе, що сервер віддав на момент того
+ * імпорту, вже оброблено». Тому касові чеки з датою не пізніше за цей
+ * рядок вважаються врахованими — інакше після виправлення парсера вони
+ * здобули б нові номери й імпортувались удруге, подвоївши комору.
+ */
+export function selectFreshOrders<T extends { orderId: string; kind: string; date: string }>(
+  orders: T[],
+  journal: { orderRef: string; kind: string; createdAt: Date }[],
+  legacyRef: string,
+): T[] {
+  const known = new Set(journal.map((r) => r.orderRef))
+  const legacyCutoff = journal
+    .filter((r) => r.orderRef === legacyRef && r.kind === 'offline_receipt')
+    .reduce<number>((max, r) => Math.max(max, r.createdAt.getTime()), 0)
+
+  return orders.filter((o) => {
+    if (known.has(o.orderId)) return false
+    if (legacyCutoff && o.kind === 'offline_receipt' && new Date(o.date).getTime() <= legacyCutoff) return false
+    return true
+  })
+}

@@ -759,15 +759,46 @@ function toProductOption(raw: unknown): ProductOption | null {
   }
 }
 
+/**
+ * Запасний ідентифікатор чека, коли сервер не дав власного.
+ *
+ * Доти запасним значенням був рядок 'order' — однаковий для ВСІХ чеків.
+ * Касові чеки «Сільпо» приходять без поля, яке парсер уміє впізнати, тож
+ * кожен діставав той самий «номер»: журнал імпорту вважав їх одним чеком,
+ * і після першого ж імпорту жоден наступний чек із магазину вже не
+ * потрапляв у комору. Знайдено на проді 18.09.2026 за рядком журналу з
+ * orderRef довжиною пʼять символів.
+ *
+ * Ключ збирається з того, що чек має завжди: вид, момент покупки, сума й
+ * кількість позицій. Він детермінований — той самий чек дає той самий ключ
+ * при кожному запиті, на чому й тримається ідемпотентність імпорту.
+ */
+export function syntheticOrderId(kind: SilpoOrder['kind'], date: string, total: number, itemCount: number): string {
+  return `${kind}:${date}:${total}:${itemCount}`
+}
+
+/** Значення, яке парсер ставив до виправлення; лишилось у журналах імпорту. */
+export const LEGACY_ORDER_ID = 'order'
+
 function toOrder(raw: unknown, kind: SilpoOrder['kind']): SilpoOrder {
   const o = unwrap(raw as Record<string, unknown>)
+  const ownId = pickString(o, [
+    'id', 'orderId', 'number', 'receiptId', 'chequeId', 'checkId', 'receiptNumber', 'fiscalNumber', 'uuid', 'guid',
+  ])
+  const date = pickString(o, ['date', 'createdAt', 'orderDate', 'purchasedAt']) ?? new Date().toISOString()
+  const total = toKopiyky(pickNumber(o, ['total', 'sum', 'amount'])) ?? 0
+  const rawItems = asArray(o.items ?? o.products ?? o.lines ?? [])
+  if (!ownId) {
+    // лише ІМЕНА полів, без значень: з них видно, як сервер насправді називає номер чека
+    logEvent('warn', 'mcp.order_without_id', { kind, keys: Object.keys(o).slice(0, 30) })
+  }
   return {
-    orderId: pickString(o, ['id', 'orderId', 'number', 'receiptId']) ?? 'order',
-    date: pickString(o, ['date', 'createdAt', 'orderDate', 'purchasedAt']) ?? new Date().toISOString(),
+    orderId: ownId ?? syntheticOrderId(kind, date, total, rawItems.length),
+    date,
     kind,
     storeName: pickString(o, ['storeName', 'branchName', 'filialName']),
-    total: toKopiyky(pickNumber(o, ['total', 'sum', 'amount'])) ?? 0,
-    items: asArray(o.items ?? o.products ?? o.lines ?? []).map((i) => {
+    total,
+    items: rawItems.map((i) => {
       const it = i as Record<string, unknown>
       return {
         productId: pickString(it, ['productId', 'id', 'sku']) ?? '',

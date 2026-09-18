@@ -3,7 +3,8 @@ import { prisma } from '@/lib/db'
 import { resolveAdapterSafe, type SilpoAdapter, type McpTraceEntry } from '@/lib/mcp'
 import { MockSilpoAdapter } from '@/lib/mcp/mock-adapter'
 import { analyzePantryPhotos, enrichRecognizedItem, type PhotoInput } from '@/lib/ai/vision'
-import { inferPantryFromReceipts } from '@/lib/domain/receipts'
+import { inferPantryFromReceipts, selectFreshOrders } from '@/lib/domain/receipts'
+import { LEGACY_ORDER_ID } from '@/lib/mcp/live-adapter'
 import { calculateMissingIngredients } from '@/lib/domain/matching'
 import { rankRecipes, formatUah } from '@/lib/domain/scoring'
 import { buildTiers, compareCookVsReady, sumBasket, estimateServingsPerPack, cartQuantity } from '@/lib/domain/pricing'
@@ -434,10 +435,9 @@ export async function importPantryFromReceipts(
 
     const seen = await prisma.receiptImport.findMany({
       where: { userId: ctx.userId },
-      select: { orderRef: true },
+      select: { orderRef: true, kind: true, createdAt: true },
     })
-    const known = new Set(seen.map((r) => r.orderRef))
-    const fresh = orders.filter((o) => !known.has(o.orderId))
+    const fresh = selectFreshOrders(orders, seen, LEGACY_ORDER_ID)
 
     if (fresh.length === 0) {
       return {

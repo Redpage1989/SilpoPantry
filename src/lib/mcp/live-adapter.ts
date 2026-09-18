@@ -248,11 +248,36 @@ export class LiveSilpoAdapter implements SilpoAdapter {
   // ─────────────────────────── історія покупок ───────────────────────────
 
   async getOrders(): Promise<SilpoOrder[]> {
-    const [offline, online] = await Promise.allSettled([
-      this.call<unknown>({
+    /**
+     * Чеки з кас вимагають контексту доставки — так само, як каталог.
+     *
+     * Причина знайдена з логів прода 18.09.2026: схема
+     * silpo_get_my_offline_orders оголошує обовʼязковими branchId,
+     * deliveryType, timeslotStart і timeslotEnd. Ми слали порожні аргументи,
+     * SchemaGuard чесно відмовлявся відправляти невалідний payload, і гілка
+     * падала ще до звернення до «Сільпо» — тому на проді не імпортувався
+     * жоден офлайн-чек. Онлайн-замовлення аргументів не вимагають, тож
+     * працювали, і половинчастий імпорт виглядав як справний.
+     *
+     * Контекст береться той самий, що вже будується для пошуку товарів;
+     * зайві для схеми ключі SchemaGuard відкине сам.
+     */
+    const offlineOrders = (async () => {
+      const ctx = await this.ensureContext()
+      return this.call<unknown>({
         candidates: ['silpo_get_my_offline_orders', 'get_my_offline_orders'],
         keywords: ['offline', 'order'],
-      }),
+        buildArgs: () => ({
+          branchId: ctx.branchId,
+          deliveryType: ctx.deliveryType,
+          timeslotStart: ctx.timeslotStart,
+          timeslotEnd: ctx.timeslotEnd,
+        }),
+      })
+    })()
+
+    const [offline, online] = await Promise.allSettled([
+      offlineOrders,
       this.call<unknown>({
         candidates: ['silpo_get_my_online_orders', 'get_my_online_orders'],
         keywords: ['online', 'order'],
